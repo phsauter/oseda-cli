@@ -1,0 +1,169 @@
+# SPDX-FileCopyrightText: 2026 Johannes Kepler University
+# SPDX-License-Identifier: Apache-2.0
+
+ARG BASE_IMAGE=ubuntu:noble
+
+ARG TOOL_IMAGE_IVERILOG="registry.iic.jku.at:5000/iic-osic-tools:tool-iverilog-latest"
+ARG TOOL_IMAGE_KEPLER_FORMAL="registry.iic.jku.at:5000/iic-osic-tools:tool-kepler-formal-latest"
+ARG TOOL_IMAGE_KLAYOUT="registry.iic.jku.at:5000/iic-osic-tools:tool-klayout-latest"
+ARG TOOL_IMAGE_OPENROAD="registry.iic.jku.at:5000/iic-osic-tools:tool-openroad-cli-latest"
+ARG TOOL_IMAGE_PULP_TOOLS="registry.iic.jku.at:5000/iic-osic-tools:tool-pulp-tools-latest"
+ARG TOOL_IMAGE_RISCV_GNU_TOOLCHAIN="registry.iic.jku.at:5000/iic-osic-tools:tool-riscv-gnu-toolchain-latest"
+ARG TOOL_IMAGE_SLANG="registry.iic.jku.at:5000/iic-osic-tools:tool-slang-latest"
+ARG TOOL_IMAGE_SLANG_YOSYS_PLUGIN="registry.iic.jku.at:5000/iic-osic-tools:tool-slang-yosys-plugin-latest"
+ARG TOOL_IMAGE_UV="registry.iic.jku.at:5000/iic-osic-tools:tool-uv-latest"
+ARG TOOL_IMAGE_VERIBLE="registry.iic.jku.at:5000/iic-osic-tools:tool-verible-latest"
+ARG TOOL_IMAGE_VERILATOR="registry.iic.jku.at:5000/iic-osic-tools:tool-verilator-latest"
+ARG TOOL_IMAGE_YOSYS="registry.iic.jku.at:5000/iic-osic-tools:tool-yosys-latest"
+
+FROM ${TOOL_IMAGE_IVERILOG} AS iverilog
+FROM ${TOOL_IMAGE_KEPLER_FORMAL} AS kepler-formal
+FROM ${TOOL_IMAGE_KLAYOUT} AS klayout
+FROM ${TOOL_IMAGE_OPENROAD} AS openroad
+FROM ${TOOL_IMAGE_PULP_TOOLS} AS pulp-tools
+FROM ${TOOL_IMAGE_RISCV_GNU_TOOLCHAIN} AS riscv-gnu-toolchain
+FROM ${TOOL_IMAGE_SLANG} AS slang
+FROM ${TOOL_IMAGE_SLANG_YOSYS_PLUGIN} AS slang-yosys-plugin
+FROM ${TOOL_IMAGE_UV} AS uv
+FROM ${TOOL_IMAGE_VERIBLE} AS verible
+FROM ${TOOL_IMAGE_VERILATOR} AS verilator
+FROM ${TOOL_IMAGE_YOSYS} AS yosys
+
+FROM ${BASE_IMAGE} AS digital
+
+ARG CONTAINER_TAG=unknown
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC \
+    LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8 \
+    HOME=/workspace \
+    USER=designer \
+    TOOLS=/foss/tools \
+    PDK_ROOT=/foss/pdks \
+    DESIGNS=/foss/designs \
+    IIC_OSIC_TOOLS_VERSION=${CONTAINER_TAG}
+
+COPY images/iic-osic-tools/digital/install_runtime.sh /tmp/install_runtime.sh
+RUN bash /tmp/install_runtime.sh && rm -f /tmp/install_runtime.sh
+
+COPY --link --from=iverilog                    ${TOOLS}/iverilog             ${TOOLS}/iverilog/
+COPY --link --from=kepler-formal               ${TOOLS}/kepler-formal        ${TOOLS}/kepler-formal/
+COPY --link --from=openroad                    ${TOOLS}/openroad             ${TOOLS}/openroad/
+# OpenROAD links against the OR-Tools/Abseil build provided by its build base.
+COPY --link --from=openroad                    /opt/or-tools                 /opt/or-tools/
+COPY --link --from=pulp-tools                  ${TOOLS}/pulp/bin/bender      ${TOOLS}/pulp/bin/bender
+COPY --link --from=pulp-tools                  ${TOOLS}/pulp/bin/sv2v        ${TOOLS}/pulp/bin/sv2v
+COPY --link --from=pulp-tools                  ${TOOLS}/pulp/SOURCES         ${TOOLS}/pulp/SOURCES
+COPY --link --from=riscv-gnu-toolchain         ${TOOLS}/riscv-gnu-toolchain ${TOOLS}/riscv-gnu-toolchain/
+COPY --link --from=slang                       ${TOOLS}/slang                ${TOOLS}/slang/
+COPY --link --from=slang-yosys-plugin          ${TOOLS}/slang-yosys-plugin  ${TOOLS}/slang-yosys-plugin/
+COPY --link --from=uv                          ${TOOLS}/uv                   ${TOOLS}/uv/
+COPY --link --from=verible                     ${TOOLS}/verible              ${TOOLS}/verible/
+COPY --link --from=verilator                   ${TOOLS}/verilator            ${TOOLS}/verilator/
+COPY --link --from=yosys                       ${TOOLS}/yosys                ${TOOLS}/yosys/
+
+COPY images/iic-osic-tools/digital/prune_runtime.sh /tmp/prune_runtime.sh
+RUN bash /tmp/prune_runtime.sh && rm -f /tmp/prune_runtime.sh
+
+COPY images/iic-osic-tools/digital/setup_tools.sh /tmp/setup_tools.sh
+RUN bash /tmp/setup_tools.sh && rm -f /tmp/setup_tools.sh
+
+COPY images/base/skel/dockerstartup/scripts/generate_container_user.sh \
+    /usr/local/libexec/iic-osic-tools/generate_container_user.sh
+COPY images/iic-osic-tools/digital/entrypoint.sh \
+    /usr/local/bin/iic-osic-tools-digital-entrypoint
+RUN chmod 755 \
+    /usr/local/libexec/iic-osic-tools/generate_container_user.sh \
+    /usr/local/bin/iic-osic-tools-digital-entrypoint
+
+ENV VIRTUAL_ENV=/opt/oseda-python \
+    PATH=/workspace/.local/bin:/opt/oseda-python/bin:/foss/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PYTHONPATH=/foss/tools/yosys/share/yosys/python3 \
+    LD_LIBRARY_PATH=/opt/or-tools/lib:/foss/tools/iverilog/lib:/foss/tools/kepler-formal/lib \
+    PYTHONPYCACHEPREFIX=/tmp/pycache \
+    SHELL=/bin/bash
+
+RUN uv venv --python /usr/bin/python3 ${VIRTUAL_ENV} && \
+    UV_CACHE_DIR=/tmp/uv-cache uv pip install --python ${VIRTUAL_ENV} \
+        black==25.12.0 \
+        click==8.2.1 \
+        codespell==2.4.2 \
+        cocotb==2.0.1 \
+        flake8==7.3.0 \
+        pytest==8.4.2 \
+        pyyaml==6.0.3 \
+        reuse==6.2.0 \
+        tclint==0.7.0 \
+        yamllint==1.37.1 && \
+    rm -rf /tmp/uv-cache
+
+COPY tool_metadata.yml /
+
+RUN mkdir -p ${DESIGNS} ${PDK_ROOT} /workspace && \
+    chmod 755 /tool_metadata.yml && \
+    chown -R 1000:1000 ${DESIGNS} ${PDK_ROOT} /workspace
+
+LABEL org.opencontainers.image.authors="Harald Pretl <harald.pretl@jku.at>; Georg Zachl <georg.zachl@jku.at>" \
+      org.opencontainers.image.url="https://github.com/iic-jku/iic-osic-tools" \
+      org.opencontainers.image.documentation="https://github.com/iic-jku/IIC-OSIC-TOOLS/blob/main/README.md" \
+      org.opencontainers.image.source="https://github.com/iic-jku/IIC-OSIC-TOOLS" \
+      org.opencontainers.image.version="${CONTAINER_TAG}" \
+      org.opencontainers.image.vendor="Department for Integrated Circuits" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.ref.name="${CONTAINER_TAG}" \
+      org.opencontainers.image.title="IIC Open Source Digital IC Tools" \
+      org.opencontainers.image.description="Ubuntu-based command-line image for digital hardware design and CI."
+
+USER 1000:1000
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/iic-osic-tools-digital-entrypoint"]
+CMD ["bash"]
+
+FROM digital AS digital-klayout
+
+USER root
+
+COPY images/iic-osic-tools/digital/install_klayout_runtime.sh /tmp/install_klayout_runtime.sh
+RUN bash /tmp/install_klayout_runtime.sh && rm -f /tmp/install_klayout_runtime.sh
+
+COPY --link --from=klayout ${TOOLS}/klayout ${TOOLS}/klayout/
+
+COPY images/iic-osic-tools/digital/setup_klayout.sh /tmp/setup_klayout.sh
+RUN bash /tmp/setup_klayout.sh && rm -f /tmp/setup_klayout.sh
+
+ENV PYTHONPATH=/foss/tools/yosys/share/yosys/python3:/foss/tools/klayout/pymod \
+    LD_LIBRARY_PATH=/opt/or-tools/lib:/foss/tools/klayout:/foss/tools/iverilog/lib:/foss/tools/kepler-formal/lib \
+    QT_QPA_PLATFORM=offscreen
+
+USER 1000:1000
+
+FROM digital AS digital-siliconcompiler
+
+ARG SILICONCOMPILER_VERSION=0.37.12
+
+USER root
+
+RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --python ${VIRTUAL_ENV} \
+        "siliconcompiler==${SILICONCOMPILER_VERSION}" && \
+    find ${VIRTUAL_ENV}/lib -type d \
+        -path '*/site-packages/siliconcompiler/data/demo_fpga' \
+        -prune -exec rm -rf {} + && \
+    rm -rf /tmp/uv-cache
+
+USER 1000:1000
+
+FROM digital-klayout AS digital-klayout-siliconcompiler
+
+ARG SILICONCOMPILER_VERSION=0.37.12
+
+USER root
+
+RUN UV_CACHE_DIR=/tmp/uv-cache uv pip install --python ${VIRTUAL_ENV} \
+        "siliconcompiler==${SILICONCOMPILER_VERSION}" && \
+    find ${VIRTUAL_ENV}/lib -type d \
+        -path '*/site-packages/siliconcompiler/data/demo_fpga' \
+        -prune -exec rm -rf {} + && \
+    rm -rf /tmp/uv-cache
+
+USER 1000:1000

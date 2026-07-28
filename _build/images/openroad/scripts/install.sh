@@ -46,7 +46,7 @@ cmake .. \
     -DSWIG_EXECUTABLE="${SWIG_PREFIX}/bin/swig" \
     -DUSE_SYSTEM_BOOST=ON \
     -DENABLE_TESTS=OFF \
-    -DBUILD_GUI=ON
+    -DBUILD_GUI="${OPENROAD_BUILD_GUI:-ON}"
 make -j"$(nproc)"
 make install
 

@@ -383,6 +383,21 @@ target "openroad" {
   cache-to   = cache_to("openroad")
 }
 
+target "openroad-cli" {
+  inherits   = ["base-tool"]
+  dockerfile = "images/openroad/Dockerfile"
+  tags       = [img("tool-openroad-cli-latest")]
+  contexts = {
+    "ctx-base-dev" = basedep("base-dev")
+  }
+  args = {
+    BASE_IMAGE_BUILD = "ctx-base-dev"
+    OPENROAD_BUILD_GUI = "OFF"
+  }
+  cache-from = tool_cache_from("openroad-cli")
+  cache-to   = cache_to("openroad-cli")
+}
+
 target "openroad-librelane" {
   inherits   = ["base-tool"]
   dockerfile = "images/openroad-librelane/Dockerfile"
@@ -943,6 +958,55 @@ target "image-full" {
   }
   cache-from = cache_from("image-full", "latest")
   cache-to   = cache_to("image-full")
+}
+
+target "image-digital" {
+  platforms = split(",", PLATFORMS)
+  dockerfile = "images/iic-osic-tools/Dockerfile.digital"
+  target = "digital"
+  contexts = {
+    "ctx-iverilog" = tooldep("iverilog")
+    "ctx-kepler-formal" = tooldep("kepler-formal")
+    "ctx-klayout" = tooldep("klayout")
+    "ctx-openroad-cli" = tooldep("openroad-cli")
+    "ctx-pulp-tools" = tooldep("pulp-tools")
+    "ctx-riscv-gnu-toolchain" = tooldep("riscv-gnu-toolchain")
+    "ctx-slang" = tooldep("slang")
+    "ctx-slang-yosys-plugin" = tooldep("slang-yosys-plugin")
+    "ctx-uv" = tooldep("uv")
+    "ctx-verible" = tooldep("verible")
+    "ctx-verilator" = tooldep("verilator")
+    "ctx-yosys" = tooldep("yosys")
+  }
+  args = {
+    TOOL_IMAGE_IVERILOG = "ctx-iverilog"
+    TOOL_IMAGE_KEPLER_FORMAL = "ctx-kepler-formal"
+    TOOL_IMAGE_KLAYOUT = "ctx-klayout"
+    TOOL_IMAGE_OPENROAD = "ctx-openroad-cli"
+    TOOL_IMAGE_PULP_TOOLS = "ctx-pulp-tools"
+    TOOL_IMAGE_RISCV_GNU_TOOLCHAIN = "ctx-riscv-gnu-toolchain"
+    TOOL_IMAGE_SLANG = "ctx-slang"
+    TOOL_IMAGE_SLANG_YOSYS_PLUGIN = "ctx-slang-yosys-plugin"
+    TOOL_IMAGE_UV = "ctx-uv"
+    TOOL_IMAGE_VERIBLE = "ctx-verible"
+    TOOL_IMAGE_VERILATOR = "ctx-verilator"
+    TOOL_IMAGE_YOSYS = "ctx-yosys"
+  }
+}
+
+target "image-digital-klayout" {
+  inherits = ["image-digital"]
+  target = "digital-klayout"
+}
+
+target "image-digital-siliconcompiler" {
+  inherits = ["image-digital"]
+  target = "digital-siliconcompiler"
+}
+
+target "image-digital-klayout-siliconcompiler" {
+  inherits = ["image-digital"]
+  target = "digital-klayout-siliconcompiler"
 }
 
 # ---------------------------------------------------------------------------
