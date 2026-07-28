@@ -89,3 +89,9 @@ RUN python3 -m pip install \
         --no-cache-dir \
         cxxheaderparser==1.9.2 \
         pybind11==3.0.4
+
+# OpenROAD c74892e requires OpenGL discovery during configuration even with
+# BUILD_GUI=OFF. The stub GUI target does not link this into the runtime.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libgl-dev && \
+    rm -rf /var/lib/apt/lists/*
