@@ -59,6 +59,7 @@ RUN apt-get update && \
         pkg-config \
         python3 \
         python3-dev \
+        python3-pip \
         python3-setuptools \
         rustup \
         swig \
@@ -82,3 +83,9 @@ RUN --mount=type=bind,source=images/base/scripts,target=/base-scripts \
     bash /base-scripts/33_install_gtest.sh && \
     bash /base-scripts/35_install_lemon.sh && \
     ldconfig
+
+RUN python3 -m pip install \
+        --break-system-packages \
+        --no-cache-dir \
+        cxxheaderparser==1.9.2 \
+        pybind11==3.0.4

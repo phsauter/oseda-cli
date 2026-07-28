@@ -71,6 +71,19 @@ jobs:
             --set "digital-build-base.cache-to=type=gha,mode=max,scope=digital-build-base-${{ steps.image.outputs.upstream_version }}-amd64" \
             digital-build-base
 
+      - name: Build and cache Yosys
+        working-directory: _build
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx bake \
+            --set digital-build-base.platform=linux/amd64 \
+            --set digital-yosys.platform=linux/amd64 \
+            --set "digital-build-base.cache-from=type=gha,scope=digital-build-base-${{ steps.image.outputs.upstream_version }}-amd64" \
+            --set "digital-yosys.cache-from=type=gha,scope=digital-yosys-${{ steps.image.outputs.upstream_version }}-amd64" \
+            --set "digital-yosys.cache-to=type=gha,mode=max,scope=digital-yosys-${{ steps.image.outputs.upstream_version }}-amd64" \
+            digital-yosys
+
       - name: Build digital CLI image
         working-directory: _build
         shell: bash
@@ -82,6 +95,7 @@ jobs:
             --set 'digital-*.platform=linux/amd64' \
             --set image-digital-source.platform=linux/amd64 \
             --set "digital-build-base.cache-from=type=gha,scope=digital-build-base-${{ steps.image.outputs.upstream_version }}-amd64" \
+            --set "digital-yosys.cache-from=type=gha,scope=digital-yosys-${{ steps.image.outputs.upstream_version }}-amd64" \
             --set "image-digital-source.tags=${LOCAL_IMAGE}" \
             --set "image-digital-source.args.CONTAINER_TAG=${{ steps.image.outputs.version }}" \
             --set "image-digital-source.args.UPSTREAM_VERSION=${{ steps.image.outputs.upstream_version }}" \
