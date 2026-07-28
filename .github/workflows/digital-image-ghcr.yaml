@@ -32,6 +32,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -41,12 +43,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          source _build/images/iic-osic-tools/digital/version.env
+          [[ "${UPSTREAM_VERSION}" =~ ^[0-9]{4}\.[0-9]{2}$ ]]
+          [[ "${IMAGE_VERSION}" == "${UPSTREAM_VERSION}".* ]]
           short_sha="${GITHUB_SHA:0:12}"
           created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           {
             echo "sha_tag=sha-${short_sha}"
+            echo "upstream_version=${UPSTREAM_VERSION}"
+            echo "version=${IMAGE_VERSION}"
             echo "created=${created}"
           } >> "${GITHUB_OUTPUT}"
+
+      - name: Verify upstream tool baseline
+        run: _tests/digital/check_upstream_baseline.sh
 
       - name: Build and cache digital source-build base
         working-directory: _build
@@ -55,8 +65,8 @@ jobs:
           set -euo pipefail
           docker buildx bake \
             --set digital-build-base.platform=linux/amd64 \
-            --set digital-build-base.cache-from=type=gha,scope=digital-build-base-amd64 \
-            --set digital-build-base.cache-to=type=gha,mode=max,scope=digital-build-base-amd64 \
+            --set "digital-build-base.cache-from=type=gha,scope=digital-build-base-${{ steps.image.outputs.upstream_version }}-amd64" \
+            --set "digital-build-base.cache-to=type=gha,mode=max,scope=digital-build-base-${{ steps.image.outputs.upstream_version }}-amd64" \
             digital-build-base
 
       - name: Build digital CLI image
@@ -69,15 +79,16 @@ jobs:
           docker buildx bake \
             --set 'digital-*.platform=linux/amd64' \
             --set image-digital-source.platform=linux/amd64 \
-            --set digital-build-base.cache-from=type=gha,scope=digital-build-base-amd64 \
+            --set "digital-build-base.cache-from=type=gha,scope=digital-build-base-${{ steps.image.outputs.upstream_version }}-amd64" \
             --set "image-digital-source.tags=${LOCAL_IMAGE}" \
-            --set "image-digital-source.args.CONTAINER_TAG=${{ steps.image.outputs.sha_tag }}" \
+            --set "image-digital-source.args.CONTAINER_TAG=${{ steps.image.outputs.version }}" \
+            --set "image-digital-source.args.UPSTREAM_VERSION=${{ steps.image.outputs.upstream_version }}" \
             --set "image-digital-source.labels.org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             --set "image-digital-source.labels.org.opencontainers.image.revision=${GITHUB_SHA}" \
             --set "image-digital-source.labels.org.opencontainers.image.created=${{ steps.image.outputs.created }}" \
             --set image-digital-source.labels.org.opencontainers.image.title=OSEDA-CLI \
-            --set image-digital-source.cache-from=type=gha,scope=digital-amd64 \
-            --set image-digital-source.cache-to=type=gha,mode=max,scope=digital-amd64 \
+            --set "image-digital-source.cache-from=type=gha,scope=digital-${{ steps.image.outputs.upstream_version }}-amd64" \
+            --set "image-digital-source.cache-to=type=gha,mode=max,scope=digital-${{ steps.image.outputs.upstream_version }}-amd64" \
             --load \
             image-digital-source 2>&1 | tee "${build_log}"
           build_status=${PIPESTATUS[0]}
@@ -98,6 +109,8 @@ jobs:
           set -euo pipefail
           docker run --rm \
             --mount "type=bind,src=${GITHUB_WORKSPACE}/_tests/digital,dst=/tests,readonly" \
+            -e "EXPECT_UPSTREAM_VERSION=${{ steps.image.outputs.upstream_version }}" \
+            -e "EXPECT_IMAGE_VERSION=${{ steps.image.outputs.version }}" \
             "${LOCAL_IMAGE}" \
             bash /tests/run_smoke_tests.sh
 
@@ -137,6 +150,14 @@ jobs:
           docker image tag "${LOCAL_IMAGE}" "${remote}"
           docker image push "${remote}"
 
+      - name: Push version tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="${REGISTRY_IMAGE}:${{ steps.image.outputs.version }}"
+          docker image tag "${LOCAL_IMAGE}" "${remote}"
+          docker image push "${remote}"
+
       - name: Push edge tag
         if: ${{ github.event_name == 'push' || inputs.publish_edge }}
         shell: bash
@@ -159,7 +180,9 @@ jobs:
           {
             echo "## OSEDA-CLI image"
             echo
+            echo "- Versioned image: \`${REGISTRY_IMAGE}:${{ steps.image.outputs.version }}\`"
             echo "- Immutable image: \`${REGISTRY_IMAGE}:${{ steps.image.outputs.sha_tag }}\`"
+            echo "- Upstream tool baseline: \`${{ steps.image.outputs.upstream_version }}\`"
             if [[ "${GITHUB_EVENT_NAME}" == "push" || "${{ inputs.publish_edge }}" == "true" ]]; then
               echo "- Test channel: \`${REGISTRY_IMAGE}:edge\`"
             fi

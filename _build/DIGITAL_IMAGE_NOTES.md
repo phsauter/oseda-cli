@@ -8,7 +8,9 @@ SPDX-License-Identifier: Apache-2.0
 ## Baseline
 
 - Upstream: `https://github.com/iic-jku/IIC-OSIC-TOOLS.git`
-- Base commit: `9240a74b15ac6b8303bced22e0defd2416a4324c`
+- Upstream release: `2026.07`
+- Base commit: `b7e6926578621c0a54b7e168f6583021933a40d2`
+- Initial CLI prerelease: `2026.07.pre1`
 - Base distribution: Ubuntu 24.04 (`ubuntu:noble`)
 - Platforms: `linux/amd64`, `linux/arm64`
 
@@ -135,7 +137,7 @@ public Croc CI pins that formatter generation, but its LLVM closure alone added
 projects or CI actions that need it rather than imposed on every digital-image
 pull.
 
-For scale, the published amd64 `hpretl/iic-osic-tools:2026.06` manifest
+For historical scale, the published amd64 `hpretl/iic-osic-tools:2026.06` manifest
 contains 5,500,855,317 compressed layer bytes (5,246.0 MiB). Its corresponding
 local SIF has a 15,601,132,149-byte apparent root filesystem (14,878.4 MiB).
 The selected digital core is therefore about one tenth of the full image:
@@ -153,7 +155,8 @@ second Python environment. Installing SiliconCompiler 0.37.12 into the
 resulting environment was also tested; Black, flake8, Tclint, yamllint, and
 SiliconCompiler all import together.
 
-These are prototype estimates rather than release-registry measurements: the
+These are pre-`2026.07` prototype estimates rather than release-registry
+measurements and must be refreshed after the versioned image builds: the
 host has no Docker daemon, so Buildah was run inside Singularity with the VFS
 driver. The repository's intermediate registry was not resolvable; artifacts
 were extracted locally from the published `2026.06` full image for this

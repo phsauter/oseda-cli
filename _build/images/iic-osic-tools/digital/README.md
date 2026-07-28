@@ -9,6 +9,12 @@ The `image-digital` Bake target builds the Ubuntu-based command-line core
 image. It does not contain a PDK or the full image's desktop and analog
 tooling.
 
+Release versions track an exact upstream release. The version contract is
+recorded in `digital/version.env`: `IIC_OSIC_TOOLS_VERSION` identifies the
+upstream tool baseline, while `OSEDA_CLI_VERSION` and the image tag identify a
+particular CLI rebuild of that baseline. For example, `2026.07.pre1`,
+`2026.07.1`, and `2026.07.2` all use the tool pins from upstream `2026.07`.
+
 The core also includes repository lint and format tooling: Verible, Slang,
 Verilator, Black, flake8, Tclint/Tclfmt, ShellCheck, shfmt, yamllint,
 codespell, REUSE, and jq.

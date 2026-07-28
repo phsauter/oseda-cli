@@ -11,6 +11,17 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 EXPECT_KLAYOUT="${EXPECT_KLAYOUT:-0}"
 EXPECT_SILICONCOMPILER="${EXPECT_SILICONCOMPILER:-0}"
+EXPECT_UPSTREAM_VERSION="${EXPECT_UPSTREAM_VERSION:-}"
+EXPECT_IMAGE_VERSION="${EXPECT_IMAGE_VERSION:-}"
+
+check_version_metadata() {
+    if [[ -n ${EXPECT_UPSTREAM_VERSION} ]]; then
+        [[ ${IIC_OSIC_TOOLS_VERSION} == "${EXPECT_UPSTREAM_VERSION}" ]]
+    fi
+    if [[ -n ${EXPECT_IMAGE_VERSION} ]]; then
+        [[ ${OSEDA_CLI_VERSION} == "${EXPECT_IMAGE_VERSION}" ]]
+    fi
+}
 
 check_required_tools() {
     while IFS= read -r tool; do
@@ -221,6 +232,7 @@ EOF
 }
 
 check_required_tools
+check_version_metadata
 check_full_only_tools_absent
 check_optional_tools
 print_versions

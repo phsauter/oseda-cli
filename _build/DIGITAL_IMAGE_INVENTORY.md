@@ -5,8 +5,9 @@ SPDX-License-Identifier: Apache-2.0
 
 # Digital CI image inventory
 
-This inventory is based on upstream commit
-`9240a74b15ac6b8303bced22e0defd2416a4324c`.
+This inventory is based on upstream release `2026.07`, commit
+`b7e6926578621c0a54b7e168f6583021933a40d2`. The CI guard verifies that the
+selected tool recipes and `tool_metadata.yml` remain aligned with that tag.
 
 ## Current image architecture
 

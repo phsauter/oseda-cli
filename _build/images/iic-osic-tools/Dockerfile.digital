@@ -32,6 +32,7 @@ FROM ${TOOL_IMAGE_YOSYS} AS yosys
 FROM ${BASE_IMAGE} AS digital
 
 ARG CONTAINER_TAG=unknown
+ARG UPSTREAM_VERSION=unknown
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
@@ -42,7 +43,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TOOLS=/foss/tools \
     PDK_ROOT=/foss/pdks \
     DESIGNS=/foss/designs \
-    IIC_OSIC_TOOLS_VERSION=${CONTAINER_TAG}
+    IIC_OSIC_TOOLS_VERSION=${UPSTREAM_VERSION} \
+    OSEDA_CLI_VERSION=${CONTAINER_TAG}
 
 COPY images/iic-osic-tools/digital/install_runtime.sh /tmp/install_runtime.sh
 RUN bash /tmp/install_runtime.sh && rm -f /tmp/install_runtime.sh
@@ -113,7 +115,8 @@ LABEL org.opencontainers.image.authors="Harald Pretl <harald.pretl@jku.at>; Geor
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.ref.name="${CONTAINER_TAG}" \
       org.opencontainers.image.title="IIC Open Source Digital IC Tools" \
-      org.opencontainers.image.description="Ubuntu-based command-line image for digital hardware design and CI."
+      org.opencontainers.image.description="Ubuntu-based command-line image for digital hardware design and CI." \
+      io.github.phsauter.oseda-cli.upstream-version="${UPSTREAM_VERSION}"
 
 USER 1000:1000
 WORKDIR /workspace
