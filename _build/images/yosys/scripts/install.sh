@@ -49,6 +49,12 @@ git clone --filter=blob:none "${YOSYS_MCY_REPO_URL}" "${YOSYS_MCY_NAME}"
 cd "${YOSYS_MCY_NAME}" || exit 1
 git checkout "${YOSYS_MCY_REPO_COMMIT}"
 sed -i "s#^PREFIX.*#PREFIX=${TOOLS}/${YOSYS_NAME}#g" Makefile
+if [[ ${YOSYS_MCY_BUILD_GUI:-ON} == OFF ]]; then
+    # MCY has no upstream no-GUI install target. Retain its CLI, dashboard,
+    # and mutation scripts while omitting only the Qt GUI build/install.
+    sed -i 's/^install: build$/install:/' Makefile
+    sed -i '/^[[:space:]]*$(MAKE) -C gui install$/d' Makefile
+fi
 make install -j"$(nproc)"
 
 # Install solver for sby

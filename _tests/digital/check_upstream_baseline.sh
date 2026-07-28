@@ -31,8 +31,7 @@ for tool in \
     slang-yosys-plugin \
     uv \
     verible \
-    verilator \
-    yosys; do
+    verilator; do
     git diff --quiet "${UPSTREAM_REF}" -- "_build/images/${tool}"
 done
 
@@ -49,5 +48,20 @@ sed 's/-DBUILD_GUI="${OPENROAD_BUILD_GUI:-ON}"/-DBUILD_GUI=ON/' \
     "${REPO_ROOT}/_build/images/openroad/scripts/install.sh" \
     > "${TMP}/install.digital.sh"
 cmp "${TMP}/install.upstream.sh" "${TMP}/install.digital.sh"
+
+git show "${UPSTREAM_REF}:_build/images/yosys/Dockerfile" \
+    > "${TMP}/yosys.Dockerfile.upstream"
+sed '/^ARG YOSYS_MCY_BUILD_GUI="ON"$/d' \
+    "${REPO_ROOT}/_build/images/yosys/Dockerfile" \
+    > "${TMP}/yosys.Dockerfile.digital"
+cmp "${TMP}/yosys.Dockerfile.upstream" "${TMP}/yosys.Dockerfile.digital"
+
+git show "${UPSTREAM_REF}:_build/images/yosys/scripts/install.sh" \
+    > "${TMP}/yosys-install.upstream.sh"
+sed \
+    '/^if \[\[ ${YOSYS_MCY_BUILD_GUI:-ON} == OFF \]\]; then$/,/^fi$/d' \
+    "${REPO_ROOT}/_build/images/yosys/scripts/install.sh" \
+    > "${TMP}/yosys-install.digital.sh"
+cmp "${TMP}/yosys-install.upstream.sh" "${TMP}/yosys-install.digital.sh"
 
 echo "[INFO] Digital tool pins match upstream ${UPSTREAM_VERSION}."

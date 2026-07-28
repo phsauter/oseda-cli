@@ -5,6 +5,7 @@ firefox
 mcy-gui
 ghdl
 magic
+mcy-gui
 ngspice
 noVNC
 nvc

@@ -1102,6 +1102,10 @@ target "digital-verilator" {
 target "digital-yosys" {
   inherits   = ["_digital-source-tool"]
   dockerfile = "images/yosys/Dockerfile"
+  args = {
+    BASE_IMAGE_BUILD = "ctx-digital-build-base"
+    YOSYS_MCY_BUILD_GUI = "OFF"
+  }
 }
 
 target "digital-slang-yosys-plugin" {
