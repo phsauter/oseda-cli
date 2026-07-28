@@ -20,7 +20,7 @@ else
     # Keep the optimized compiler and the coverage postprocessor used by CI.
     make -C src -j"$(nproc)" opt
     make -C src -j"$(nproc)" ../bin/verilator_coverage_bin_dbg
-    make -j"$(nproc)" \
+    make \
         VL_INST_PUBLIC_BIN_FILES="verilator_bin verilator_coverage_bin_dbg" \
         install-all
 fi # VERILATOR_BUILD_DEBUG
