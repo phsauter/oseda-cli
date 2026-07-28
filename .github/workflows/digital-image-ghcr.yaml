@@ -48,6 +48,17 @@ jobs:
             echo "created=${created}"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Build and cache digital source-build base
+        working-directory: _build
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx bake \
+            --set digital-build-base.platform=linux/amd64 \
+            --set digital-build-base.cache-from=type=gha,scope=digital-build-base-amd64 \
+            --set digital-build-base.cache-to=type=gha,mode=max,scope=digital-build-base-amd64 \
+            digital-build-base
+
       - name: Build digital CLI image
         working-directory: _build
         shell: bash
@@ -58,6 +69,7 @@ jobs:
           docker buildx bake \
             --set 'digital-*.platform=linux/amd64' \
             --set image-digital-source.platform=linux/amd64 \
+            --set digital-build-base.cache-from=type=gha,scope=digital-build-base-amd64 \
             --set "image-digital-source.tags=${LOCAL_IMAGE}" \
             --set "image-digital-source.args.CONTAINER_TAG=${{ steps.image.outputs.sha_tag }}" \
             --set "image-digital-source.labels.org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \

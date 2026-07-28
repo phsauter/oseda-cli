@@ -18,6 +18,7 @@ RUN apt-get update && \
         binutils \
         bison \
         build-essential \
+        capnproto \
         ca-certificates \
         clang \
         cmake \
@@ -34,6 +35,8 @@ RUN apt-get update && \
         libboost-system-dev \
         libboost-thread-dev \
         libbz2-dev \
+        libcapnp-dev \
+        libdw-dev \
         libeigen3-dev \
         libexpat1-dev \
         libffi-dev \
@@ -45,6 +48,7 @@ RUN apt-get update && \
         libomp-dev \
         libpcre2-dev \
         libreadline-dev \
+        libtbb-dev \
         libtool \
         libyaml-cpp-dev \
         libzstd-dev \
