@@ -6,12 +6,15 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "${REPO_ROOT}/_build/images/iic-osic-tools/digital/version.env"
-UPSTREAM_REF="${UPSTREAM_VERSION}^{commit}"
+UPSTREAM_REF="${UPSTREAM_COMMIT}^{commit}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 
 git rev-parse --verify "${UPSTREAM_REF}" >/dev/null
 git merge-base --is-ancestor "${UPSTREAM_REF}" HEAD
+if git rev-parse --verify --quiet "refs/tags/${UPSTREAM_VERSION}^{commit}" >/dev/null; then
+    [[ $(git rev-parse "refs/tags/${UPSTREAM_VERSION}^{commit}") == "${UPSTREAM_COMMIT}" ]]
+fi
 
 # The published manifest and all selected source-build recipes stay byte-for-
 # byte aligned with the declared upstream release. OpenROAD has one intentional
