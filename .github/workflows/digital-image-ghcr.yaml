@@ -1,6 +1,9 @@
 name: Build and publish OSEDA CLI
 
 on:
+  push:
+    branches:
+      - feature/digital-ci-image
   workflow_dispatch:
     inputs:
       publish_edge:
@@ -111,7 +114,7 @@ jobs:
           docker image push "${remote}"
 
       - name: Push edge tag
-        if: ${{ inputs.publish_edge }}
+        if: ${{ github.event_name == 'push' || inputs.publish_edge }}
         shell: bash
         run: |
           set -euo pipefail
@@ -133,7 +136,7 @@ jobs:
             echo "## OSEDA-CLI image"
             echo
             echo "- Immutable image: \`${REGISTRY_IMAGE}:${{ steps.image.outputs.sha_tag }}\`"
-            if [[ "${{ inputs.publish_edge }}" == "true" ]]; then
+            if [[ "${GITHUB_EVENT_NAME}" == "push" || "${{ inputs.publish_edge }}" == "true" ]]; then
               echo "- Test channel: \`${REGISTRY_IMAGE}:edge\`"
             fi
             echo "- Unpacked root filesystem: ${unpacked_mib} MiB"
