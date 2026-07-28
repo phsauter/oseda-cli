@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Johannes Kepler University
+# SPDX-License-Identifier: Apache-2.0
+
+firefox
+mcy-gui
+ghdl
+magic
+ngspice
+noVNC
+nvc
+openEMS
+palace
+qucs-s
+surelog
+vncserver
+websockify
+xcircuit
+xschem
+Xyce

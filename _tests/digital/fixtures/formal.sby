@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Johannes Kepler University
+# SPDX-License-Identifier: Apache-2.0
+
+[options]
+mode prove
+depth 1
+
+[engines]
+smtbmc yices
+
+[script]
+read -formal formal.sv
+prep -top formal_top
+
+[files]
+formal.sv

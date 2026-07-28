@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Johannes Kepler University
+# SPDX-License-Identifier: Apache-2.0
+
+package:
+  name: digital_image_smoke
+  authors:
+    - "IIC-OSIC-TOOLS contributors"
+
+sources:
+  - simple.sv
