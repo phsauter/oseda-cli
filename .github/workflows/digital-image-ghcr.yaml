@@ -31,10 +31,10 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Define image metadata
         id: image
@@ -53,6 +53,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          build_log="${RUNNER_TEMP}/digital-build.log"
+          set +e
           docker buildx bake \
             --set image-digital.platform=linux/amd64 \
             --set "image-digital.tags=${LOCAL_IMAGE}" \
@@ -66,7 +68,18 @@ jobs:
             --set openroad-cli.cache-from=type=gha,scope=openroad-cli-amd64 \
             --set openroad-cli.cache-to=type=gha,mode=max,scope=openroad-cli-amd64 \
             --load \
-            image-digital
+            image-digital 2>&1 | tee "${build_log}"
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if (( build_status != 0 )); then
+            detail="$(
+              tail -n 20 "${build_log}" |
+                sed 's/%/%25/g; s/\r/%0D/g; s/$/%0A/' |
+                tr -d '\n'
+            )"
+            echo "::error title=Digital BuildKit build failed::${detail}"
+            exit "${build_status}"
+          fi
 
       - name: Run functional smoke tests
         shell: bash
