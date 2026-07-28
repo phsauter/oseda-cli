@@ -120,6 +120,11 @@ target "base-dev" {
   cache-to   = cache_to("base-dev")
 }
 
+target "digital-build-base" {
+  platforms  = split(",", PLATFORMS)
+  dockerfile = "images/digital-build-base/Dockerfile"
+}
+
 # ---------------------------------------------------------------------------
 # Tool images
 # ---------------------------------------------------------------------------
@@ -967,7 +972,6 @@ target "image-digital" {
   contexts = {
     "ctx-iverilog" = tooldep("iverilog")
     "ctx-kepler-formal" = tooldep("kepler-formal")
-    "ctx-klayout" = tooldep("klayout")
     "ctx-openroad-cli" = tooldep("openroad-cli")
     "ctx-pulp-tools" = tooldep("pulp-tools")
     "ctx-riscv-gnu-toolchain" = tooldep("riscv-gnu-toolchain")
@@ -981,7 +985,6 @@ target "image-digital" {
   args = {
     TOOL_IMAGE_IVERILOG = "ctx-iverilog"
     TOOL_IMAGE_KEPLER_FORMAL = "ctx-kepler-formal"
-    TOOL_IMAGE_KLAYOUT = "ctx-klayout"
     TOOL_IMAGE_OPENROAD = "ctx-openroad-cli"
     TOOL_IMAGE_PULP_TOOLS = "ctx-pulp-tools"
     TOOL_IMAGE_RISCV_GNU_TOOLCHAIN = "ctx-riscv-gnu-toolchain"
@@ -997,6 +1000,12 @@ target "image-digital" {
 target "image-digital-klayout" {
   inherits = ["image-digital"]
   target = "digital-klayout"
+  contexts = {
+    "ctx-klayout" = tooldep("klayout")
+  }
+  args = {
+    TOOL_IMAGE_KLAYOUT = "ctx-klayout"
+  }
 }
 
 target "image-digital-siliconcompiler" {
@@ -1005,8 +1014,107 @@ target "image-digital-siliconcompiler" {
 }
 
 target "image-digital-klayout-siliconcompiler" {
-  inherits = ["image-digital"]
+  inherits = ["image-digital-klayout"]
   target = "digital-klayout-siliconcompiler"
+}
+
+target "image-digital-source" {
+  inherits = ["image-digital"]
+  contexts = {
+    "ctx-iverilog" = "target:digital-iverilog"
+    "ctx-kepler-formal" = "target:digital-kepler-formal"
+    "ctx-openroad-cli" = "target:digital-openroad"
+    "ctx-pulp-tools" = "target:digital-pulp-tools"
+    "ctx-riscv-gnu-toolchain" = "target:digital-riscv-gnu-toolchain"
+    "ctx-slang" = "target:digital-slang"
+    "ctx-slang-yosys-plugin" = "target:digital-slang-yosys-plugin"
+    "ctx-uv" = "target:digital-uv"
+    "ctx-verible" = "target:digital-verible"
+    "ctx-verilator" = "target:digital-verilator"
+    "ctx-yosys" = "target:digital-yosys"
+  }
+}
+
+# Source-build variants use the minimal Ubuntu builder instead of the full
+# repository development base. These stages are build-only and do not become
+# ancestors of the digital runtime filesystem.
+target "_digital-source-tool" {
+  inherits = ["base-tool"]
+  contexts = {
+    "ctx-digital-build-base" = "target:digital-build-base"
+  }
+  args = {
+    BASE_IMAGE_BUILD = "ctx-digital-build-base"
+  }
+  cache-from = []
+  cache-to   = ["type=inline"]
+}
+
+target "digital-iverilog" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/iverilog/Dockerfile"
+}
+
+target "digital-kepler-formal" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/kepler-formal/Dockerfile"
+}
+
+target "digital-openroad" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/openroad/Dockerfile"
+  args = {
+    BASE_IMAGE_BUILD = "ctx-digital-build-base"
+    OPENROAD_BUILD_GUI = "OFF"
+  }
+}
+
+target "digital-pulp-tools" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/pulp-tools/Dockerfile"
+}
+
+target "digital-riscv-gnu-toolchain" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/riscv-gnu-toolchain/Dockerfile"
+}
+
+target "digital-slang" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/slang/Dockerfile"
+}
+
+target "digital-uv" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/uv/Dockerfile"
+}
+
+target "digital-verible" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/verible/Dockerfile"
+}
+
+target "digital-verilator" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/verilator/Dockerfile"
+}
+
+target "digital-yosys" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/yosys/Dockerfile"
+}
+
+target "digital-slang-yosys-plugin" {
+  inherits   = ["_digital-source-tool"]
+  dockerfile = "images/slang-yosys-plugin/Dockerfile"
+  contexts = {
+    "ctx-digital-build-base" = "target:digital-build-base"
+    "ctx-yosys" = "target:digital-yosys"
+  }
+  args = {
+    BASE_IMAGE_BUILD = "ctx-digital-build-base"
+    TOOL_IMAGE_YOSYS = "ctx-yosys"
+  }
 }
 
 # ---------------------------------------------------------------------------

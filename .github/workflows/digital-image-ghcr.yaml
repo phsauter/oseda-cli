@@ -56,19 +56,18 @@ jobs:
           build_log="${RUNNER_TEMP}/digital-build.log"
           set +e
           docker buildx bake \
-            --set image-digital.platform=linux/amd64 \
-            --set "image-digital.tags=${LOCAL_IMAGE}" \
-            --set "image-digital.args.CONTAINER_TAG=${{ steps.image.outputs.sha_tag }}" \
-            --set "image-digital.labels.org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
-            --set "image-digital.labels.org.opencontainers.image.revision=${GITHUB_SHA}" \
-            --set "image-digital.labels.org.opencontainers.image.created=${{ steps.image.outputs.created }}" \
-            --set image-digital.labels.org.opencontainers.image.title=OSEDA-CLI \
-            --set image-digital.cache-from=type=gha,scope=digital-amd64 \
-            --set image-digital.cache-to=type=gha,mode=max,scope=digital-amd64 \
-            --set openroad-cli.cache-from=type=gha,scope=openroad-cli-amd64 \
-            --set openroad-cli.cache-to=type=gha,mode=max,scope=openroad-cli-amd64 \
+            --set 'digital-*.platform=linux/amd64' \
+            --set image-digital-source.platform=linux/amd64 \
+            --set "image-digital-source.tags=${LOCAL_IMAGE}" \
+            --set "image-digital-source.args.CONTAINER_TAG=${{ steps.image.outputs.sha_tag }}" \
+            --set "image-digital-source.labels.org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --set "image-digital-source.labels.org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --set "image-digital-source.labels.org.opencontainers.image.created=${{ steps.image.outputs.created }}" \
+            --set image-digital-source.labels.org.opencontainers.image.title=OSEDA-CLI \
+            --set image-digital-source.cache-from=type=gha,scope=digital-amd64 \
+            --set image-digital-source.cache-to=type=gha,mode=max,scope=digital-amd64 \
             --load \
-            image-digital 2>&1 | tee "${build_log}"
+            image-digital-source 2>&1 | tee "${build_log}"
           build_status=${PIPESTATUS[0]}
           set -e
           if (( build_status != 0 )); then
