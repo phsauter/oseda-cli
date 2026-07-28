@@ -56,6 +56,8 @@ Explicitly excluded:
 - examples and demonstration projects
 - KLayout and its Qt6/Ruby runtime closure from the core target
 - MCY, including its Qt GUI; it is not required by the initial digital flows
+- Verilator's developer-only `verilator_bin_dbg`; the optimized compiler and
+  coverage postprocessor remain available
 
 ## Command-line startup
 
@@ -80,6 +82,18 @@ runtime `designer` identity.
 
 The image contains no PDK. PDK-dependent smoke and integration tests will mount
 a PDK read-only and set the project-specific environment paths explicitly.
+
+## Source-build resource policy
+
+The digital Verilator stage keeps the upstream 5.050 source pin and the full
+image's default recipe behavior. Its digital-only build parameter compiles the
+optimized compiler and coverage postprocessor sequentially, omitting the
+developer debug compiler. This reduces build work and runtime size without
+removing normal simulation or coverage functionality.
+
+The GHCR workflow limits BuildKit to two simultaneous build operations. Large
+OpenROAD, RISC-V GCC, Verible, Kepler, and Verilator builds otherwise each use
+all runner CPUs concurrently and can exceed a small hosted runner's memory.
 
 ## Known validation constraints
 

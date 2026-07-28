@@ -12,8 +12,18 @@ git checkout "${VERILATOR_REPO_COMMIT}"
 autoconf
 unset VERILATOR_ROOT
 ./configure --prefix="${TOOLS}/${VERILATOR_NAME}"
-make -j"$(nproc)"
-make install
+if [[ ${VERILATOR_BUILD_DEBUG:-ON} == ON ]]; then
+    make -j"$(nproc)"
+    make install
+else
+    # The default target also builds the developer-only verilator_bin_dbg.
+    # Keep the optimized compiler and the coverage postprocessor used by CI.
+    make -C src -j"$(nproc)" opt
+    make -C src -j"$(nproc)" ../bin/verilator_coverage_bin_dbg
+    make -j"$(nproc)" \
+        VL_INST_PUBLIC_BIN_FILES="verilator_bin verilator_coverage_bin_dbg" \
+        install-all
+fi # VERILATOR_BUILD_DEBUG
 # and we strip the binaries to reduce size
 find "${TOOLS}/${VERILATOR_NAME}" -type f -executable -exec strip {} \;
 

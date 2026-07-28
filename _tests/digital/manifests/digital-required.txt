@@ -5,6 +5,7 @@ slang
 verible-verilog-format
 verible-verilog-lint
 verilator
+verilator_coverage
 iverilog
 vvp
 yosys

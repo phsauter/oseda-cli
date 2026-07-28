@@ -17,9 +17,9 @@ if git rev-parse --verify --quiet "refs/tags/${UPSTREAM_VERSION}^{commit}" >/dev
 fi
 
 # The published manifest and all selected source-build recipes stay byte-for-
-# byte aligned with the declared upstream release. OpenROAD has one intentional
-# difference, validated separately below: BUILD_GUI is parameterized so the
-# digital target can set it to OFF while the full target retains ON.
+# byte aligned with the declared upstream release. The narrowly parameterized
+# OpenROAD, Verilator, and Yosys differences are validated separately below;
+# their defaults retain the upstream/full behavior.
 git diff --quiet "${UPSTREAM_REF}" -- _build/tool_metadata.yml
 
 for tool in \
@@ -30,10 +30,27 @@ for tool in \
     slang \
     slang-yosys-plugin \
     uv \
-    verible \
-    verilator; do
+    verible; do
     git diff --quiet "${UPSTREAM_REF}" -- "_build/images/${tool}"
 done
+
+git show "${UPSTREAM_REF}:_build/images/verilator/Dockerfile" \
+    > "${TMP}/verilator.Dockerfile.upstream"
+sed '/^ARG VERILATOR_BUILD_DEBUG="ON"$/d' \
+    "${REPO_ROOT}/_build/images/verilator/Dockerfile" \
+    > "${TMP}/verilator.Dockerfile.digital"
+cmp "${TMP}/verilator.Dockerfile.upstream" "${TMP}/verilator.Dockerfile.digital"
+
+git show "${UPSTREAM_REF}:_build/images/verilator/scripts/install.sh" \
+    > "${TMP}/verilator-install.upstream.sh"
+sed \
+    -e '/^if \[\[ ${VERILATOR_BUILD_DEBUG:-ON} == ON \]\]; then$/d' \
+    -e '/^else$/,/^fi # VERILATOR_BUILD_DEBUG$/d' \
+    -e 's/^    make -j"$(nproc)"$/make -j"$(nproc)"/' \
+    -e 's/^    make install$/make install/' \
+    "${REPO_ROOT}/_build/images/verilator/scripts/install.sh" \
+    > "${TMP}/verilator-install.digital.sh"
+cmp "${TMP}/verilator-install.upstream.sh" "${TMP}/verilator-install.digital.sh"
 
 git show "${UPSTREAM_REF}:_build/images/openroad/Dockerfile" \
     > "${TMP}/Dockerfile.upstream"

@@ -66,6 +66,7 @@ print_versions() {
     verible-verilog-lint --version
     verible-verilog-format --version
     verilator --version
+    verilator_coverage --version
     iverilog -V
     yosys -V
     openroad -version

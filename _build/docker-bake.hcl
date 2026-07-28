@@ -1097,6 +1097,9 @@ target "digital-verible" {
 target "digital-verilator" {
   inherits   = ["_digital-source-tool"]
   dockerfile = "images/verilator/Dockerfile"
+  args = {
+    VERILATOR_BUILD_DEBUG = "OFF"
+  }
 }
 
 target "digital-yosys" {

@@ -9,5 +9,6 @@ FROM ${BASE_IMAGE_BUILD} AS verilator
 ARG VERILATOR_REPO_URL="https://github.com/verilator/verilator.git"
 ARG VERILATOR_REPO_COMMIT="v5.050"
 ARG VERILATOR_NAME="verilator"
+ARG VERILATOR_BUILD_DEBUG="ON"
 RUN --mount=type=bind,source=images/verilator,target=/images/verilator \
     bash /images/verilator/scripts/install.sh

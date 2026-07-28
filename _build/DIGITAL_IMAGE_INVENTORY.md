@@ -28,7 +28,7 @@ full-image Python packages. The digital image therefore starts directly from
 | --- | --- | --- |
 | `slang` | `/foss/tools/slang` | `slang` parser and elaborator |
 | `verible` | `/foss/tools/verible` | Verible lint, format, and related utilities |
-| `verilator` | `/foss/tools/verilator` | SystemVerilog compilation and simulation |
+| `verilator` | `/foss/tools/verilator` | Optimized SystemVerilog compiler/simulator and coverage postprocessor; developer debug compiler excluded |
 | `iverilog` | `/foss/tools/iverilog` | Icarus Verilog and `vvp` |
 | `yosys` | `/foss/tools/yosys` | Yosys, ABC, EQY, SBY, and Yices2; MCY is excluded |
 | `slang-yosys-plugin` | `/foss/tools/slang-yosys-plugin` | Yosys-Slang frontend |

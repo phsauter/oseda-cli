@@ -6,6 +6,7 @@ ghdl
 magic
 mcy
 mcy-gui
+verilator_bin_dbg
 ngspice
 noVNC
 nvc
