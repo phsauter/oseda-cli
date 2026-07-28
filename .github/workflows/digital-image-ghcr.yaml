@@ -1,0 +1,144 @@
+name: Build and publish OSEDA CLI
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_edge:
+        description: Also update the mutable edge tag
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: digital-image-ghcr
+  cancel-in-progress: false
+
+env:
+  REGISTRY_IMAGE: ghcr.io/phsauter/oseda-cli
+  LOCAL_IMAGE: oseda-cli:ci
+
+jobs:
+  build-test-publish:
+    name: Build, test, and publish amd64
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Define image metadata
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA:0:12}"
+          created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          {
+            echo "sha_tag=sha-${short_sha}"
+            echo "created=${created}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build digital CLI image
+        working-directory: _build
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx bake \
+            --set image-digital.platform=linux/amd64 \
+            --set "image-digital.tags=${LOCAL_IMAGE}" \
+            --set "image-digital.args.CONTAINER_TAG=${{ steps.image.outputs.sha_tag }}" \
+            --set "image-digital.labels.org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --set "image-digital.labels.org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --set "image-digital.labels.org.opencontainers.image.created=${{ steps.image.outputs.created }}" \
+            --set image-digital.labels.org.opencontainers.image.title=OSEDA-CLI \
+            --set image-digital.cache-from=type=gha,scope=digital-amd64 \
+            --set image-digital.cache-to=type=gha,mode=max,scope=digital-amd64 \
+            --set openroad-cli.cache-from=type=gha,scope=openroad-cli-amd64 \
+            --set openroad-cli.cache-to=type=gha,mode=max,scope=openroad-cli-amd64 \
+            --load \
+            image-digital
+
+      - name: Run functional smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --mount "type=bind,src=${GITHUB_WORKSPACE}/_tests/digital,dst=/tests,readonly" \
+            "${LOCAL_IMAGE}" \
+            bash /tests/run_smoke_tests.sh
+
+      - name: Run entrypoint smoke tests
+        env:
+          CONTAINER_ENGINE: docker
+        run: _tests/digital/run_entrypoint_tests.sh "${LOCAL_IMAGE}"
+
+      - name: Measure image
+        id: size
+        shell: bash
+        run: |
+          set -euo pipefail
+          unpacked_bytes="$(
+            docker run --rm --entrypoint du "${LOCAL_IMAGE}" -sbx / |
+              awk '{print $1}'
+          )"
+          docker image save "${LOCAL_IMAGE}" | gzip -1 > "${RUNNER_TEMP}/oseda-cli.tar.gz"
+          archive_bytes="$(stat -c '%s' "${RUNNER_TEMP}/oseda-cli.tar.gz")"
+          {
+            echo "unpacked_bytes=${unpacked_bytes}"
+            echo "archive_bytes=${archive_bytes}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push commit tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="${REGISTRY_IMAGE}:${{ steps.image.outputs.sha_tag }}"
+          docker image tag "${LOCAL_IMAGE}" "${remote}"
+          docker image push "${remote}"
+
+      - name: Push edge tag
+        if: ${{ inputs.publish_edge }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="${REGISTRY_IMAGE}:edge"
+          docker image tag "${LOCAL_IMAGE}" "${remote}"
+          docker image push "${remote}"
+
+      - name: Report result
+        shell: bash
+        run: |
+          set -euo pipefail
+          unpacked_mib="$(
+            awk 'BEGIN { printf "%.1f", ${{ steps.size.outputs.unpacked_bytes }} / 1048576 }'
+          )"
+          archive_mib="$(
+            awk 'BEGIN { printf "%.1f", ${{ steps.size.outputs.archive_bytes }} / 1048576 }'
+          )"
+          {
+            echo "## OSEDA-CLI image"
+            echo
+            echo "- Immutable image: \`${REGISTRY_IMAGE}:${{ steps.image.outputs.sha_tag }}\`"
+            if [[ "${{ inputs.publish_edge }}" == "true" ]]; then
+              echo "- Test channel: \`${REGISTRY_IMAGE}:edge\`"
+            fi
+            echo "- Unpacked root filesystem: ${unpacked_mib} MiB"
+            echo "- Compressed Docker archive: ${archive_mib} MiB"
+            echo
+            echo "The compressed archive includes Docker archive metadata and is an"
+            echo "approximation of registry transfer size."
+          } >> "${GITHUB_STEP_SUMMARY}"
