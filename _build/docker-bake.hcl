@@ -1104,7 +1104,7 @@ target "digital-yosys" {
   dockerfile = "images/yosys/Dockerfile"
   args = {
     BASE_IMAGE_BUILD = "ctx-digital-build-base"
-    YOSYS_MCY_BUILD_GUI = "OFF"
+    YOSYS_INSTALL_MCY = "OFF"
   }
 }
 

@@ -55,7 +55,7 @@ Explicitly excluded:
 - FPGA tool collections
 - examples and demonstration projects
 - KLayout and its Qt6/Ruby runtime closure from the core target
-- MCY's optional Qt6 GUI (the MCY command-line tooling remains)
+- MCY, including its Qt GUI; it is not required by the initial digital flows
 
 ## Command-line startup
 

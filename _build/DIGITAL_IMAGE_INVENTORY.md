@@ -30,7 +30,7 @@ full-image Python packages. The digital image therefore starts directly from
 | `verible` | `/foss/tools/verible` | Verible lint, format, and related utilities |
 | `verilator` | `/foss/tools/verilator` | SystemVerilog compilation and simulation |
 | `iverilog` | `/foss/tools/iverilog` | Icarus Verilog and `vvp` |
-| `yosys` | `/foss/tools/yosys` | Yosys, ABC, EQY, SBY, MCY, and Yices2 |
+| `yosys` | `/foss/tools/yosys` | Yosys, ABC, EQY, SBY, and Yices2; MCY is excluded |
 | `slang-yosys-plugin` | `/foss/tools/slang-yosys-plugin` | Yosys-Slang frontend |
 | `openroad-cli` | `/foss/tools/openroad` | OpenROAD built with `BUILD_GUI=OFF` |
 | `riscv-gnu-toolchain` | `/foss/tools/riscv-gnu-toolchain` | Bare-metal GCC/G++, binutils, GDB, and Newlib |

@@ -51,7 +51,7 @@ cmp "${TMP}/install.upstream.sh" "${TMP}/install.digital.sh"
 
 git show "${UPSTREAM_REF}:_build/images/yosys/Dockerfile" \
     > "${TMP}/yosys.Dockerfile.upstream"
-sed '/^ARG YOSYS_MCY_BUILD_GUI="ON"$/d' \
+sed '/^ARG YOSYS_INSTALL_MCY="ON"$/d' \
     "${REPO_ROOT}/_build/images/yosys/Dockerfile" \
     > "${TMP}/yosys.Dockerfile.digital"
 cmp "${TMP}/yosys.Dockerfile.upstream" "${TMP}/yosys.Dockerfile.digital"
@@ -59,7 +59,8 @@ cmp "${TMP}/yosys.Dockerfile.upstream" "${TMP}/yosys.Dockerfile.digital"
 git show "${UPSTREAM_REF}:_build/images/yosys/scripts/install.sh" \
     > "${TMP}/yosys-install.upstream.sh"
 sed \
-    '/^if \[\[ ${YOSYS_MCY_BUILD_GUI:-ON} == OFF \]\]; then$/,/^fi$/d' \
+    -e '/^if \[\[ ${YOSYS_INSTALL_MCY:-ON} == ON \]\]; then$/d' \
+    -e '/^fi # YOSYS_INSTALL_MCY$/d' \
     "${REPO_ROOT}/_build/images/yosys/scripts/install.sh" \
     > "${TMP}/yosys-install.digital.sh"
 cmp "${TMP}/yosys-install.upstream.sh" "${TMP}/yosys-install.digital.sh"

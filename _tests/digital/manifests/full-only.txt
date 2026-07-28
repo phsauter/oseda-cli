@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 firefox
-mcy-gui
 ghdl
 magic
+mcy
 mcy-gui
 ngspice
 noVNC
