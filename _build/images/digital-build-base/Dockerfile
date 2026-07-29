@@ -92,6 +92,57 @@ RUN python3 -m pip install \
 
 # OpenROAD c74892e requires OpenGL discovery during configuration even with
 # BUILD_GUI=OFF. The stub GUI target does not link this into the runtime.
+# Stack's installer checks the complete Ubuntu build dependency closure before
+# building sv2v; keep it satisfied so it never invokes APT after metadata was
+# removed.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libgl-dev && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+        gnupg \
+        libgl-dev \
+        netbase && \
+    rm -rf /var/lib/apt/lists/* && \
+    for package in \
+        g++ \
+        gcc \
+        git \
+        gnupg \
+        libc6-dev \
+        libffi-dev \
+        libgmp-dev \
+        make \
+        netbase \
+        xz-utils \
+        zlib1g-dev; do \
+        dpkg-query -s "${package}" | \
+            grep -q '^Status: install ok installed$' || exit 1; \
+    done && \
+    for command in \
+        ar \
+        autoconf \
+        autoreconf \
+        bison \
+        cargo \
+        cmake \
+        curl \
+        flex \
+        g++ \
+        gawk \
+        git \
+        gperf \
+        make \
+        ninja \
+        patch \
+        perl \
+        pkg-config \
+        python3 \
+        rustup \
+        strip \
+        swig \
+        tar \
+        tclsh \
+        texi2any \
+        unzip \
+        wget \
+        xz; do \
+        command -v "${command}" >/dev/null || exit 1; \
+    done

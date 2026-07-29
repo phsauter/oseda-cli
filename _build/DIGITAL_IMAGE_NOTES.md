@@ -97,6 +97,10 @@ coverage functionality.
 The GHCR workflow limits BuildKit to two simultaneous build operations. Large
 OpenROAD, RISC-V GCC, Verible, Kepler, and Verilator builds otherwise each use
 all runner CPUs concurrently and can exceed a small hosted runner's memory.
+It also checkpoints the source-build base, Yosys, Verilator, and PULP tools in
+separate scoped GitHub Actions caches. This makes failures in those expensive
+stages visible before the aggregate build and prevents a later failure from
+discarding their completed work.
 
 ## Known validation constraints
 
@@ -237,6 +241,15 @@ installed successfully without invoking `help2man`; both version commands ran,
 the developer debug binary was absent, the recorded source pin matched
 `v5.050`, and the installed compiler translated a SystemVerilog module into
 C++.
+
+The PULP source recipe was also exercised with the exact 2026.07 pins:
+Bender `bb5f891c2ffff099be03d3862f94f2516f432c18` (0.32.1) built and ran,
+and sv2v `6662fa5da71f87797598060f17728b284b99a9fc` built through Stack. The
+Stack bootstrap checks Ubuntu's complete compiler dependency set before doing
+any work. `gnupg` and `netbase` are therefore explicit build-base packages,
+alongside the already installed GMP, FFI, compiler, and compression
+development packages; the final image still receives only the PULP binaries
+and source manifest.
 
 The smoke suite additionally exposed and now records:
 
