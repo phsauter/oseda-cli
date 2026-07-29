@@ -88,10 +88,11 @@ a PDK read-only and set the project-specific environment paths explicitly.
 The digital Verilator stage keeps the upstream 5.050 source pin and the full
 image's default recipe behavior. Its digital-only build parameter compiles the
 optimized compiler and coverage postprocessor sequentially, omitting the
-developer debug compiler, then installs the selected artifacts serially because
-Verilator's man-page generation invokes the installed compiler. This reduces
-build work and runtime size without removing normal simulation or coverage
-functionality.
+developer debug compiler, then installs only the selected binaries and runtime
+data serially. Man pages are omitted, avoiding a build-time `help2man`
+dependency and runtime documentation that is outside the CLI image contract.
+This reduces build work and runtime size without removing normal simulation or
+coverage functionality.
 
 The GHCR workflow limits BuildKit to two simultaneous build operations. Large
 OpenROAD, RISC-V GCC, Verible, Kepler, and Verilator builds otherwise each use
@@ -231,10 +232,11 @@ runtime and Ubuntu packages.
 
 On 2026-07-29, the exact Verilator 5.050 digital recipe was independently
 rebuilt in an Ubuntu Noble environment with GCC 13, Python 3.12, Flex 2.6.4,
-Bison 3.8.2, and `help2man`. The optimized compiler and coverage postprocessor
-compiled and installed successfully; both version commands ran, the developer
-debug binary was absent, the recorded source pin matched `v5.050`, and the
-installed compiler translated a SystemVerilog module into C++.
+Bison 3.8.2. The optimized compiler and coverage postprocessor compiled and
+installed successfully without invoking `help2man`; both version commands ran,
+the developer debug binary was absent, the recorded source pin matched
+`v5.050`, and the installed compiler translated a SystemVerilog module into
+C++.
 
 The smoke suite additionally exposed and now records:
 

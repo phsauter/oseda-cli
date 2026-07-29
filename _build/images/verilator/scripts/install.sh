@@ -22,7 +22,10 @@ else
     make -C src -j"$(nproc)" ../bin/verilator_coverage_bin_dbg
     make \
         VL_INST_PUBLIC_BIN_FILES="verilator_bin verilator_coverage_bin_dbg" \
-        install-all
+        installbin \
+        installredirect \
+        installdata \
+        install-msg
 fi # VERILATOR_BUILD_DEBUG
 # and we strip the binaries to reduce size
 find "${TOOLS}/${VERILATOR_NAME}" -type f -executable -exec strip {} \;
