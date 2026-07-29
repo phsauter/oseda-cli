@@ -13,6 +13,9 @@ IMAGE=$1
 CONTAINER_ENGINE=${CONTAINER_ENGINE:-docker}
 TMP=$(mktemp -d)
 trap 'rm -rf "${TMP}"' EXIT
+# Docker preserves bind-mount ownership and mode. Allow the image's numeric
+# runtime user to traverse this runner-owned fixture directory.
+chmod 755 "${TMP}"
 
 # A direct command must replace PID 1 and retain the digital environment.
 # shellcheck disable=SC2016
@@ -44,6 +47,7 @@ trap 'rm -rf "${TMP}"' EXIT
 cat > "${TMP}/.designinit" <<'EOF'
 export DIGITAL_DESIGNINIT_SMOKE=ready
 EOF
+chmod 644 "${TMP}/.designinit"
 # shellcheck disable=SC2016
 "${CONTAINER_ENGINE}" run --rm \
     --mount "type=bind,src=${TMP},dst=/smoke-designs,readonly" \
