@@ -101,6 +101,19 @@ jobs:
             --set "digital-verilator.cache-to=type=gha,mode=max,scope=digital-verilator-${{ steps.image.outputs.upstream_version }}-amd64" \
             digital-verilator
 
+      - name: Build and cache PULP tools
+        working-directory: _build
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx bake \
+            --set digital-build-base.platform=linux/amd64 \
+            --set digital-pulp-tools.platform=linux/amd64 \
+            --set "digital-build-base.cache-from=type=gha,scope=digital-build-base-${{ steps.image.outputs.upstream_version }}-amd64" \
+            --set "digital-pulp-tools.cache-from=type=gha,scope=digital-pulp-tools-${{ steps.image.outputs.upstream_version }}-amd64" \
+            --set "digital-pulp-tools.cache-to=type=gha,mode=max,scope=digital-pulp-tools-${{ steps.image.outputs.upstream_version }}-amd64" \
+            digital-pulp-tools
+
       - name: Build digital CLI image
         working-directory: _build
         shell: bash
@@ -112,6 +125,7 @@ jobs:
             --set 'digital-*.platform=linux/amd64' \
             --set image-digital-source.platform=linux/amd64 \
             --set "digital-build-base.cache-from=type=gha,scope=digital-build-base-${{ steps.image.outputs.upstream_version }}-amd64" \
+            --set "digital-pulp-tools.cache-from=type=gha,scope=digital-pulp-tools-${{ steps.image.outputs.upstream_version }}-amd64" \
             --set "digital-verilator.cache-from=type=gha,scope=digital-verilator-${{ steps.image.outputs.upstream_version }}-amd64" \
             --set "digital-yosys.cache-from=type=gha,scope=digital-yosys-${{ steps.image.outputs.upstream_version }}-amd64" \
             --set "image-digital-source.tags=${LOCAL_IMAGE}" \
@@ -131,11 +145,11 @@ jobs:
           if (( build_status != 0 )); then
             detail="$(
               {
-                grep -Ei \
-                  'fatal error:|internal compiler error:|(^|[^[:alpha:]])error:|killed|out of memory|make.*\\*\\*\\*' \
-                  "${build_log}" | tail -n 40 || true
+                grep -Ein -B 2 -A 4 \
+                  'fatal error:|internal compiler error:|(^|[^[:alpha:]])error:|killed|out of memory|make(\[[0-9]+\])?: \*\*\*|failed to|not found|no such file' \
+                  "${build_log}" | tail -n 80 || true
                 echo "----- final build output -----"
-                tail -n 30 "${build_log}"
+                tail -n 40 "${build_log}"
               } |
                 sed 's/%/%25/g; s/\r/%0D/g; s/$/%0A/' |
                 tr -d '\n'
