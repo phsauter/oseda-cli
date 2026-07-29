@@ -98,8 +98,9 @@ The initial dependency groups are:
   helper and `libnss-wrapper`, called by a digital-only transparent entrypoint.
   No graphical startup script or service is copied.
 - Project compilation: Make, CMake, Ninja, GCC/G++, binutils, and
-  `pkg-config`. A native compiler, ccache, mold, and zlib headers are required
-  by the repository's Verilator build and its generated FST-capable models.
+  `pkg-config`. A native compiler, ccache, mold, and LZ4/zlib headers are
+  required by the repository's Verilator build and its generated FST-capable
+  models.
 - Python: CPython, venv support, and a single uv-managed environment containing
   cocotb, pytest, Black, flake8, Tclint/Tclfmt, yamllint, codespell, and REUSE.
   Black 25.12.0 and yamllint 1.37.1 are the newest releases compatible with

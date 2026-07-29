@@ -253,7 +253,8 @@ and source manifest.
 
 The smoke suite additionally exposed and now records:
 
-- `ccache`, `mold`, and `zlib1g-dev` as Verilator model-build requirements;
+- `ccache`, `mold`, `liblz4-dev`, and `zlib1g-dev` as Verilator model-build
+  requirements, including FST tracing;
 - Click as an SBY runtime dependency;
 - OR-Tools/Abseil as OpenROAD runtime dependencies; the CLI build removes
   the earlier Qt5, X11, OpenGL, Mesa, and LLVM runtime closure;

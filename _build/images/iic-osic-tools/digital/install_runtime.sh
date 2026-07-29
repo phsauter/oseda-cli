@@ -31,6 +31,7 @@ apt-get install -y --no-install-recommends \
     libgcc-s1 \
     libgmp10 \
     libgomp1 \
+    liblz4-dev \
     libmpc3 \
     libmpfr6 \
     libnss-wrapper \
