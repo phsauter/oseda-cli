@@ -180,7 +180,7 @@ jobs:
         run: |
           set -euo pipefail
           unpacked_bytes="$(
-            docker run --rm --entrypoint du "${LOCAL_IMAGE}" -sbx / |
+            docker run --rm --user 0:0 --entrypoint du "${LOCAL_IMAGE}" -sbx / |
               awk '{print $1}'
           )"
           docker image save "${LOCAL_IMAGE}" | gzip -1 > "${RUNNER_TEMP}/oseda-cli.tar.gz"
