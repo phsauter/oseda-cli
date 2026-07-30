@@ -10,7 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 - Upstream: `https://github.com/iic-jku/IIC-OSIC-TOOLS.git`
 - Upstream release: `2026.07`
 - Base commit: `b7e6926578621c0a54b7e168f6583021933a40d2`
-- Initial CLI prerelease: `2026.07.pre1`
+- Initial CLI release: `2026.07`
 - Base distribution: Ubuntu 24.04 (`ubuntu:noble`)
 - Platforms: `linux/amd64`, `linux/arm64`
 
