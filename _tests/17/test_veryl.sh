@@ -6,10 +6,10 @@
 # Test Veryl with a simple example
 
 if [ -z "${RAND}" ]; then
-    RAND=$(hexdump -e '/1 "%02x"' -n4 < /dev/urandom)
+    RAND=$(hexdump -v -e '/1 "%02x"' -n4 < /dev/urandom)
 fi
 
-# test output is kept out of the bind-mounted source tree (see run_docker_tests.sh)
+# test output is kept out of the bind-mounted source tree (see run_integration_tests.sh)
 RUNS_DIR=${IIC_TEST_RUNDIR:-/tmp/iic-osic-tools-tests}
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,9 +17,9 @@ TEMP=${RUNS_DIR}/${RAND}/17
 mkdir -p "$TEMP"
 cd "$TEMP" || exit 1
 
-# Install Veryl if not already installed
+# The veryl/veryl-ls proxies and the default toolchain are preinstalled in
+# the image by verylup setup at build time; install on demand as a fallback.
 if ! command -v veryl >/dev/null 2>&1; then
-    export PATH="$PATH:$XDG_DATA_HOME/veryl/toolchains/latest"
     verylup --quiet install latest
 fi
 

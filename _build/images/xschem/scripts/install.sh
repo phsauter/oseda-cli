@@ -10,44 +10,8 @@ git clone --filter=blob:none "${XSCHEM_REPO_URL}" "${XSCHEM_NAME}"
 cd "${XSCHEM_NAME}" || exit 1
 git checkout "${XSCHEM_REPO_COMMIT}"
 
-# Upstream commit 36d710d2 ("Ask user before allowing execution of embedded schematic
-# scripts") added an unguarded Tk `focus` call to `proc tclpropeval2` in src/xschem.tcl.
-# tclpropeval2 evaluates `tcleval(...)` properties, which the IHP PDK uses for its
-# annotate_fet_params/annotate_bip_params symbols. When xschem runs headless (--no_x)
-# Tk is not loaded, so `focus` does not exist and every tcleval() property aborts with
-#   tclvareval(): error executing tclpropeval2 {tcleval([display_fet_params M2A ])}:
-#   invalid command name "focus"
-# which breaks batch netlisting of any schematic carrying such an annotation.
-# The `ask` branch right above it is already guarded by `has_x`; guard `focus` the same
-# way. Drop this patch once xschem fixes it upstream.
-python3 - src/xschem.tcl << 'PYEOF'
-import sys
-fname = sys.argv[1]
-old = '    focus [xschem get top_path].drw\n'
-new = '    if {[info exists has_x]} { focus [xschem get top_path].drw }\n'
-with open(fname) as f:
-    content = f.read()
-if new in content:
-    print("[INFO] xschem tclpropeval2 focus guard already present, nothing to do.")
-elif content.count(old) == 1:
-    with open(fname, 'w') as f:
-        f.write(content.replace(old, new))
-    print(f"[INFO] Guarded the headless-unsafe focus call in {fname}.")
-else:
-    print(f"[WARN] Unguarded focus call not found in {fname} "
-          f"({content.count(old)} matches) - patch may be obsolete, please re-check.")
-PYEOF
-
 ./configure --prefix="${TOOLS}/${XSCHEM_NAME}"
 
-# xschem's src/Makefile declares "expandlabel.c expandlabel.h: expandlabel.y" as a
-# multi-target rule with a single bison recipe. Under "make -j" GNU make treats this
-# as two independent rules and can launch bison twice concurrently (once for the .c
-# needed by expandlabel.o, once for the .h needed by parselabel.o). One invocation
-# then truncates expandlabel.c while gcc is compiling it, failing the build with a
-# bogus "unterminated comment" error. Generate the bison/flex sources serially first,
-# then compile everything in parallel.
-make -C src expandlabel.c expandlabel.h eval_expr.c parselabel.c
 make -j"$(nproc)"
 make install
 
@@ -78,6 +42,43 @@ append postinit_commands {
     }
   }
 }
+EOF
+
+# Require the Ctrl key for zoom/pan inside graph (waveform) widgets, so plain mouse
+# wheel scrolling keeps zooming the schematic when the pointer happens to be over a
+# graph. This is a PDK-independent UI preference, so it goes into the system-wide
+# xschemrc. It is set from postinit_commands for the same reason as above: the user
+# xschemrc sources the PDK xschemrc, so PDK files are evaluated after this one and a
+# plain "set" here could be overridden. The value is read at event time, so setting it
+# in postinit_commands takes effect for the whole session; the Options menu toggle
+# still works for anyone who wants the default behavior back.
+cat >> "${TOOLS}/${XSCHEM_NAME}/share/xschem/xschemrc" <<'EOF'
+
+###########################################################################
+#### USE CTRL KEY FOR ZOOM/PAN IN GRAPHS
+###########################################################################
+append postinit_commands {
+  set graph_use_ctrl_key 1
+}
+EOF
+
+# Let xschem run the Tcl scripts embedded in schematics and symbols without putting
+# up a confirmation dialog, which the PDK launcher symbols and the tcleval() attributes
+# need in order to work silently. This has to live in the system-wide xschemrc, because
+# that is the only file xschem is guaranteed to read: after sourcing it, xschem sources
+# exactly one of ./xschemrc in the directory it was started in or ~/.xschem/xschemrc,
+# whichever it finds first, and never both. Every IIC design template ships a
+# project-local xschemrc, so the shipped user xschemrc is shadowed in most real
+# sessions. A plain "set" is enough here, unlike the two settings above: none of the
+# packaged PDK xschemrc files touches the variable, so nothing sourced later overrides
+# it, and the value is only read when a schematic is loaded, which happens after the
+# whole rc chain has run.
+cat >> "${TOOLS}/${XSCHEM_NAME}/share/xschem/xschemrc" <<'EOF'
+
+###########################################################################
+#### ALLOW EMBEDDED TCL SCRIPTS WITHOUT ASKING
+###########################################################################
+set xschem_execute_scripts yes
 EOF
 
 echo "${XSCHEM_NAME} ${XSCHEM_REPO_COMMIT}" > "${TOOLS}/${XSCHEM_NAME}/SOURCES"

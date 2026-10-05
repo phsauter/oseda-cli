@@ -7,16 +7,16 @@
 # (https://github.com/iic-jku/open-pdks-regression-tests)
 
 if [ -z "${RAND}" ]; then
-    RAND=$(hexdump -e '/1 "%02x"' -n4 < /dev/urandom)
+    RAND=$(hexdump -v -e '/1 "%02x"' -n4 < /dev/urandom)
 fi
 
-# test output is kept out of the bind-mounted source tree (see run_docker_tests.sh)
+# test output is kept out of the bind-mounted source tree (see run_integration_tests.sh)
 RUNS_DIR=${IIC_TEST_RUNDIR:-/tmp/iic-osic-tools-tests}
 
 DEBUG=${DEBUG:-0}
 
 TMP=${RUNS_DIR}/${RAND}/26
-LOG=$TMP/lvs_drc_pex_sg13g2.log
+LOG=$TMP/drc_lvs_pex_sg13g2.log
 REPO=open-pdks-regression-tests
 
 mkdir -p "$TMP"

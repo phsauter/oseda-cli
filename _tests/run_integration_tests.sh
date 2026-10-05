@@ -3,7 +3,7 @@
 # Johannes Kepler University, Department for Integrated Circuits
 # SPDX-License-Identifier: Apache-2.0
 #
-# Run all tests (checks) in the subdirectories using a specified Docker image.
+# Run all tests (checks) in the subdirectories using a specified container image.
 
 # Only emit ANSI colors when writing to a terminal, so redirected output and CI
 # logs stay clean. The container runs without a TTY, hence the decision has to
@@ -23,8 +23,57 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
+# Select the container engine (Podman or Docker), can be overridden by setting
+# CONTAINER_ENGINE. Unlike the start scripts, Podman is preferred here when both
+# are installed: a test run needs no daemon and is happy rootless.
+if [ -z ${CONTAINER_ENGINE+z} ]; then
+    if command -v podman > /dev/null 2>&1; then
+        CONTAINER_ENGINE="podman"
+    elif command -v docker > /dev/null 2>&1; then
+        CONTAINER_ENGINE="docker"
+    else
+        echo "${RED}[ERROR] No container engine found, please install Podman or Docker!${NC}"
+        exit 1
+    fi
+    echo "[INFO] Container engine auto-set to ${CONTAINER_ENGINE}."
+fi
+
+if ! command -v "${CONTAINER_ENGINE}" > /dev/null 2>&1; then
+    echo "${RED}[ERROR] Container engine <${CONTAINER_ENGINE}> not found!${NC}"
+    exit 1
+fi
+
+# Detect Podman, and Podman rootless mode on Linux (the docker CLI can also be
+# the podman-docker alias, so check the version string). Only Linux needs
+# --userns=keep-id: there the container user would otherwise be mapped to a
+# subuid that cannot write the bind-mounted source tree and run dir. On macOS
+# the podman machine already maps the host user, and adding keep-id there only
+# costs an ID-shifting pass over the (large) image.
+ENGINE_EXTRA_PARAMS=""
+if ${CONTAINER_ENGINE} --version 2>/dev/null | grep -qi "podman"; then
+    if [[ "$OSTYPE" == "linux"* ]] && \
+        ${CONTAINER_ENGINE} info --format '{{.Host.Security.Rootless}}' 2>/dev/null | grep -qi "true"; then
+        echo "[INFO] Podman rootless mode detected, adding --userns=keep-id."
+        ENGINE_EXTRA_PARAMS="--userns=keep-id"
+    fi
+fi
+
+# The bind-mounted source tree keeps its host label, which "container_t" may not
+# access. See README section 5.1.1 and the start scripts.
+if [[ "$OSTYPE" == "linux"* ]] && \
+    { { command -v selinuxenabled > /dev/null 2>&1 && selinuxenabled; } || [ -f /sys/fs/selinux/enforce ]; }; then
+    echo "[INFO] SELinux detected, adding --security-opt label=disable."
+    ENGINE_EXTRA_PARAMS="${ENGINE_EXTRA_PARAMS} --security-opt label=disable"
+fi
+
 FULL_TAG=$1
-RAND=$(hexdump -e '/1 "%02x"' -n4 < /dev/urandom)
+# -v is required: hexdump collapses repeated identical output lines into a
+# single "*", and "/1" makes every byte its own line -- so without it any two
+# equal adjacent random bytes turn the run ID into something like "ad294d*" or
+# even "b8*". That lands in the container name (which rejects "*"), in the run
+# dir and in the name of the generated runner script. It hits about 1.8 % of
+# runs, which is often enough to lose one.
+RAND=$(hexdump -v -e '/1 "%02x"' -n4 < /dev/urandom)
 export RAND
 CONTAINER_NAME=iic-osic-tools_test${RAND}
 CMD=_run_tests_${RAND}.sh
@@ -55,7 +104,14 @@ mkdir -p "$HOST_RUNDIR"
 # Test 28 alone defines the wall clock of the whole suite, so it must start
 # first. Note these are runtimes *under full contention*; standalone they are
 # considerably shorter (21: 108 s, 27: 78 s).
-SLOW_TESTS="28 26 24 20 21 01 10 07 18 22 19 04 15"
+# Test 31 measured about 1800 s standalone (it does the same per-cell DRC/LVS/PEX
+# work as 26, on 25 instead of 30 cells), so it is queued right next to it. Its
+# runtime under contention is not measured yet.
+# Test 32 runs the same kind of template regression as 20, on the
+# ihp-sg13cmos5l sibling of that template, so it is queued right next to it.
+# Test 35 measured 600 to 1200 s standalone (Magic PEX of four PDK benches), so
+# it is queued after 31. Its runtime under contention is not measured yet.
+SLOW_TESTS="28 26 31 35 24 20 32 21 01 10 07 18 22 19 04 15"
 
 # The current directory is bind-mounted at $WORKDIR in the container, so the
 # test list can be assembled here and the paths just re-based. Matching the
@@ -82,7 +138,7 @@ fi
 if [ "${IIC_TEST_NO_PULL:-0}" = 1 ]; then
     echo "[INFO] IIC_TEST_NO_PULL=1, testing the local image $FULL_TAG without pulling."
 else
-    docker pull --quiet "$FULL_TAG" > /dev/null
+    ${CONTAINER_ENGINE} pull --quiet "$FULL_TAG" > /dev/null
 fi
 
 # Create the test runner script
@@ -98,9 +154,9 @@ else
     NC=""
 fi
 
-# The test list is assembled by run_docker_tests.sh and inlined below, ordered
-# longest-running first so the job pool does not end up waiting for a long test
-# that started last.
+# The test list is assembled by run_integration_tests.sh and inlined below,
+# ordered longest-running first so the job pool does not end up waiting for a
+# long test that started last.
 #
 # No --halt: it made GNU parallel announce every failed job and the shutdown of
 # its job pool, and it silently left the remaining tests unreported. Without it
@@ -110,7 +166,7 @@ fi
 #
 # --joblog records start time, runtime and exit status of every test, which is
 # what the per-test timings at the end of the run (and the SLOW_TESTS order in
-# run_docker_tests.sh) are based on.
+# run_integration_tests.sh) are based on.
 JOBLOG=$RUNDIR/$RAND/joblog.tsv
 mkdir -p "\$(dirname "\$JOBLOG")"
 set -o pipefail
@@ -147,8 +203,9 @@ chmod +x "$CMD"
 echo "[INFO] Test output of this run: $HOST_RUNDIR/$RAND (inside the container: $RUNDIR/$RAND)"
 # ACD_JOBS sizes the inner simulation pool of test 21; empty means "use the
 # test's default" (see _tests/21/test_analog_circuit_design.sh).
-docker run -i --rm --name "$CONTAINER_NAME" --user "$(id -u):$(id -g)" -e DISPLAY= -e RAND="$RAND" \
-    -e ACD_JOBS="${ACD_JOBS:-}" \
+# shellcheck disable=SC2086
+${CONTAINER_ENGINE} run -i --rm --name "$CONTAINER_NAME" --user "$(id -u):$(id -g)" -e DISPLAY= -e RAND="$RAND" \
+    -e ACD_JOBS="${ACD_JOBS:-}" $ENGINE_EXTRA_PARAMS \
     -v "$PWD":"$WORKDIR":rw -v "$HOST_RUNDIR":"$RUNDIR":rw "$FULL_TAG" -s "$WORKDIR/$CMD"
 RESULT=$?
 

@@ -7,10 +7,10 @@
 # this for IHP SG13G2 only
 
 if [ -z "${RAND}" ]; then
-    RAND=$(hexdump -e '/1 "%02x"' -n4 < /dev/urandom)
+    RAND=$(hexdump -v -e '/1 "%02x"' -n4 < /dev/urandom)
 fi
 
-# test output is kept out of the bind-mounted source tree (see run_docker_tests.sh)
+# test output is kept out of the bind-mounted source tree (see run_integration_tests.sh)
 RUNS_DIR=${IIC_TEST_RUNDIR:-/tmp/iic-osic-tools-tests}
 
 WORK_DIR=${RUNS_DIR}/${RAND}/10
@@ -30,9 +30,6 @@ export YOSYS_EXE=$TOOLS/yosys/bin/yosys
 export OPENROAD_EXE=$TOOLS/openroad/bin/openroad
 export OPENSTA_EXE=$TOOLS/openroad/bin/sta
 export FLOW_HOME
-
-# FIXME this is needed to run flow w/o errors
-export GDS_ALLOW_EMPTY=spi_DEF_FILL
 
 # run ORFS with IHP130 SG13G2
 export DESIGN_CONFIG=./designs/ihp-sg13g2/spi/config.mk

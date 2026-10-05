@@ -6,6 +6,7 @@
 set -e
 set -o pipefail
 export SCRIPT_DIR=$TOOLS/osic-multitool
+PDK_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ ! -d "$PDK_ROOT" ]; then
     mkdir -p "$PDK_ROOT"
@@ -32,20 +33,28 @@ if [ ! -d "$PDK_ROOT/sky130A" ]; then
 fi
 
 if [ -d "$PDK_ROOT/sky130A" ]; then
-	#FIXME gzip Liberty (.lib) files
-	#FIXME cd "$PDK_ROOT/sky130A/libs.ref"
-	#FIXME find . -name "*.lib" -exec gzip {} \;
+	# gzip Liberty (.lib) files
+	bash "$PDK_SCRIPT_DIR/gzip_liberty.sh" "$PDK_ROOT/sky130A"
 
 	# Add custom bindkeys for Magic
     echo "# Custom bindkeys for ICD" 		        >> "$PDK_ROOT/sky130A/libs.tech/magic/sky130A.magicrc"
     echo "source $SCRIPT_DIR/iic-magic-bindkeys" 	>> "$PDK_ROOT/sky130A/libs.tech/magic/sky130A.magicrc"
 
-	# FIXME: Repair klayout tech file
-	sed -i 's/>sky130</>sky130A</g' "$PDK_ROOT/sky130A/libs.tech/klayout/tech/sky130A.lyt"
-	sed -i 's/sky130.lyp/sky130A.lyp/g' "$PDK_ROOT/sky130A/libs.tech/klayout/tech/sky130A.lyt"
-	sed -i '/<base-path>/c\ <base-path/>' "$PDK_ROOT/sky130A/libs.tech/klayout/tech/sky130A.lyt"
-	# shellcheck disable=SC2016
-	sed -i '/<original-base-path>/c\ <original-base-path>$PDK_ROOT/$PDK/libs.tech/klayout</original-base-path>' "$PDK_ROOT/sky130A/libs.tech/klayout/tech/sky130A.lyt"
+	# Repair the KLayout tech file shipped by open_pdks: it still carries the
+	# generic "sky130" tech/layer-property naming and the absolute base paths of
+	# the machine the PDK was built on. All four edits are idempotent; the guard
+	# only exists so we notice when the workaround becomes unnecessary (still
+	# needed as of 2026-08-06).
+	SKY130A_LYT="$PDK_ROOT/sky130A/libs.tech/klayout/tech/sky130A.lyt"
+	if grep -q -e '>sky130<' -e 'sky130\.lyp' -e '<base-path>' "$SKY130A_LYT"; then
+		sed -i 's/>sky130</>sky130A</g' "$SKY130A_LYT"
+		sed -i 's/sky130.lyp/sky130A.lyp/g' "$SKY130A_LYT"
+		sed -i '/<base-path>/c\ <base-path/>' "$SKY130A_LYT"
+		# shellcheck disable=SC2016
+		sed -i '/<original-base-path>/c\ <original-base-path>$PDK_ROOT/$PDK/libs.tech/klayout</original-base-path>' "$SKY130A_LYT"
+	else
+		echo "[INFO] sky130A.lyt needs no repair anymore, this patch can be dropped"
+	fi
 
 	# Patch the pcells for compatibility with gdsfactory >= 8.x / kfactory >= 1.x
 	# so they work with the current system gdsfactory (no dedicated venv needed).
@@ -137,9 +146,8 @@ PYEOF
 fi
 
 if [ -d "$PDK_ROOT/sky130B" ]; then
-	#FIXME gzip Liberty (.lib) files
-	#FIXME cd "$PDK_ROOT/sky130B/libs.ref"
-	#FIXME find . -name "*.lib" -exec gzip {} \;
+	# gzip Liberty (.lib) files
+	bash "$PDK_SCRIPT_DIR/gzip_liberty.sh" "$PDK_ROOT/sky130B"
 
     echo "# Custom bindkeys for ICD" 		        >> "$PDK_ROOT/sky130B/libs.tech/magic/sky130B.magicrc"
     echo "source $SCRIPT_DIR/iic-magic-bindkeys" 	>> "$PDK_ROOT/sky130B/libs.tech/magic/sky130B.magicrc"
@@ -172,9 +180,8 @@ if [ ! -d "$PDK_ROOT/gf180mcuD" ]; then
 fi
 
 if [ -d "$PDK_ROOT/gf180mcuD" ]; then
-	#FIXME gzip Liberty (.lib) files
-	#FIXME cd "$PDK_ROOT/gf180mcuD/libs.ref"
-	#FIXME find . -name "*.lib" -exec gzip {} \;
+	# gzip Liberty (.lib) files
+	bash "$PDK_SCRIPT_DIR/gzip_liberty.sh" "$PDK_ROOT/gf180mcuD"
 
 	cd "$PDK_ROOT/gf180mcuD/libs.tech/ngspice" || exit 1
 	
@@ -191,6 +198,20 @@ if [ -d "$PDK_ROOT/gf180mcuD" ]; then
 	# Fix missing PDK variant in path definitions for in xschemrc
 	sed -i 's|set 180MCU_MODELS ${PDK_ROOT}/models/ngspice|set 180MCU_MODELS ${PDK_ROOT}/gf180mcuD/libs.tech/ngspice|' "$PDK_ROOT/gf180mcuD/libs.tech/xschem/xschemrc"
 
+	# The xschem "Create FET .save file" menu entry runs "mkdir -p $netlist_dir"
+	# -- a shell command -- from Tcl, so clicking it aborts with
+	# `invalid command name "mkdir"` and no .save file is written. Tcl's own
+	# `file mkdir` is the exact equivalent: it creates parent directories and
+	# does not complain about an existing one. The IHP PDKs fixed the same
+	# defect upstream (iic-jku/IHP-Open-PDK#61).
+	XSCHEM_MENU="$PDK_ROOT/gf180mcuD/libs.tech/xschem/xschem-menu"
+	if grep -q '^[[:space:]]*mkdir -p \$netlist_dir[[:space:]]*$' "$XSCHEM_MENU"; then
+		sed -i 's/^\([[:space:]]*\)mkdir -p \$netlist_dir[[:space:]]*$/\1file mkdir $netlist_dir/' "$XSCHEM_MENU"
+		echo "[INFO] Replaced 'mkdir -p' by 'file mkdir' in $XSCHEM_MENU"
+	else
+		echo "[WARN] 'mkdir -p \$netlist_dir' not found in $XSCHEM_MENU (already fixed upstream?)"
+	fi
+
 	# Fix incorrect sky130 model reference in gf180mcuD xschem transistor symbols.
 	# The OP annotation tcleval expressions incorrectly use msky130_fd_pr__@model
 	# instead of m0 (the actual internal MOSFET element name in gf180mcu subcircuits).
@@ -206,9 +227,23 @@ if [ -d "$PDK_ROOT/gf180mcuD" ]; then
 	#    passes None otherwise, yielding silently empty pfet/via_dev devices).
 	#  - fix the draw_via_dev() call in vias_gen.py (stray v7-era arguments).
 	# See patches/gf180mcu-pcells-gdsfactory9.patch for the full change.
+	# Tracked upstream as
+	# https://github.com/fossi-foundation/globalfoundries-pdk-libs-gf180mcu_fd_pr/issues/2
+	# (PR #3 is the WIP port); drop this once that lands and open_pdks ships it.
 	(
 		cd "$PDK_ROOT/gf180mcuD/libs.tech/klayout/tech/pymacros" || exit 1
 		git apply /images/open_pdks/patches/gf180mcu-pcells-gdsfactory9.patch
+	)
+
+	# Fix the efuse pcell, which comes out empty in both cell libraries:
+	#  - draw_efuse() is called without its required device_name argument
+	#    (unused in the body, so the patch also gives it a default).
+	#  - it reads efuse.gds from /home/$USER/.klayout/pymacros/cells/efuse,
+	#    where nothing ever installs it -- the GDS ships next to the module.
+	# See patches/gf180mcu-efuse.patch for the full change.
+	(
+		cd "$PDK_ROOT/gf180mcuD/libs.tech/klayout/tech/pymacros" || exit 1
+		git apply /images/open_pdks/patches/gf180mcu-efuse.patch
 	)
 
     # Give universal write access to the macro directory, necessary for saving options

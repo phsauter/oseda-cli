@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # shellcheck shell=bash
 #
-# Single source of truth for the IIC-OSIC-Tools shell environment.
+# Single source of truth for the IIC-OSIC-TOOLS shell environment.
 # This file is sourced from /etc/profile (login shells) and from
 # /headless/.bashrc (interactive shells); a guard prevents double init.
 
@@ -60,7 +60,9 @@ if [ -z "${FOSS_INIT_DONE+x}" ]; then
     _path_add_tool_custom   "osic-multitool"
 
     export SAK=$TOOLS/sak
-    export PATH=$TOOLS/bin:$SAK:/usr/local/sbin:$PATH
+    # /usr/local/sbin is already part of the image's default PATH, so do not
+    # prepend it again here (it would show up twice).
+    export PATH=$TOOLS/bin:$SAK:$PATH
 
     # Seed PYTHONPATH with the interpreter's default paths so the tool-specific
     # entries appended below extend (rather than shadow) the system modules.
@@ -92,9 +94,34 @@ if [ -z "${FOSS_INIT_DONE+x}" ]; then
     # Default PDK — only set when not already provided by the user/sub-shell.
     export PDK=${PDK:-ihp-sg13g2}
     export PDKPATH=${PDKPATH:-$PDK_ROOT/$PDK}
-    export STD_CELL_LIBRARY=${STD_CELL_LIBRARY:-sg13g2_stdcell}
     export SPICE_USERINIT_DIR=${SPICE_USERINIT_DIR:-$PDK_ROOT/$PDK/libs.tech/ngspice}
     export KLAYOUT_PATH=${KLAYOUT_PATH:-"/headless/.klayout:$PDKPATH/libs.tech/klayout:$PDKPATH/libs.tech/klayout/tech"}
+
+    # Everything above follows $PDK, so the per-PDK settings below have to as
+    # well: starting the container with `-e PDK=<other>` used to leave these at
+    # their ihp-sg13g2 values, which pointed the standard cell library at the
+    # wrong PDK. Same mapping as sak-pdk-script.sh, which switches the PDK of a
+    # running session; keep the two in sync. An explicit value still wins, so a
+    # custom or unpackaged library can be selected as before.
+    if [ -z "${STD_CELL_LIBRARY}" ]; then
+        case "$PDK" in
+            sky130A|sky130B)      STD_CELL_LIBRARY="sky130_fd_sc_hd" ;;
+            ihp-sg13g2)           STD_CELL_LIBRARY="sg13g2_stdcell" ;;
+            ihp-sg13cmos5l)       STD_CELL_LIBRARY="sg13cmos5l_stdcell" ;;
+            gf180mcuC|gf180mcuD)  STD_CELL_LIBRARY="gf180mcu_fd_sc_mcu7t5v0" ;;
+            *)
+                [ -z "${IIC_OSIC_TOOLS_QUIET}" ] && \
+                    echo "[WARN] No standard cell library known for PDK '$PDK', leaving STD_CELL_LIBRARY unset."
+                ;;
+        esac
+    fi
+    export STD_CELL_LIBRARY
+
+    # gf180mcu needs GF_PDK_OPTION set, otherwise KLayout warns and assumes D.
+    case "$PDK" in
+        gf180mcuC) export GF_PDK_OPTION="${GF_PDK_OPTION:-C}" ;;
+        gf180mcuD) export GF_PDK_OPTION="${GF_PDK_OPTION:-D}" ;;
+    esac
 
     # This gets rid of the DBUS warning
     # https://unix.stackexchange.com/questions/230238/x-applications-warn-couldnt-connect-to-accessibility-bus-on-stderr/230442#230442
@@ -111,9 +138,13 @@ fi
 # /etc/passwd entry, the shell may not populate USER automatically.
 [ -z "${USER}" ] && USER=$(id -un 2>/dev/null || echo designer) && export USER
 
-# First, check if XDG_RUNTIME_DIR is set, if not, set to default.
-if [ -z "${XDG_RUNTIME_DIR+x}" ]; then
-    export XDG_RUNTIME_DIR=/tmp/runtime-default
+# First, check if XDG_RUNTIME_DIR is set. If not (or if it still points at
+# the legacy shared /tmp/runtime-default), use a per-user directory: the XDG
+# spec requires the directory to be owned by the current user with mode
+# 0700, and programs like dbus-daemon verify this before using it.
+if [ -z "${XDG_RUNTIME_DIR+x}" ] || [ "$XDG_RUNTIME_DIR" = "/tmp/runtime-default" ]; then
+    XDG_RUNTIME_DIR="/tmp/runtime-$(id -u)"
+    export XDG_RUNTIME_DIR
 fi
 # Second, verify if the actual directory exists, if not, create it.
 if [ ! -d "$XDG_RUNTIME_DIR" ]; then
@@ -121,13 +152,17 @@ if [ ! -d "$XDG_RUNTIME_DIR" ]; then
     chmod 700 "$XDG_RUNTIME_DIR"
 fi
 
-# This is needed for Veryl to store its data
-if [ -z "${XDG_DATA_HOME+x}" ]; then
-    export XDG_DATA_HOME=/headless/.data-default
+# A Wayland socket forwarded by start_x.sh is bind-mounted at a neutral path
+# (mounting it directly into the per-user XDG_RUNTIME_DIR would re-create
+# that directory root-owned); link it into place.
+if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -S "/tmp/host-wayland/${WAYLAND_DISPLAY}" ] \
+    && [ ! -e "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; then
+    ln -s "/tmp/host-wayland/${WAYLAND_DISPLAY}" "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}"
 fi
-if [ ! -d "$XDG_DATA_HOME" ]; then
-    mkdir -p "$XDG_DATA_HOME"
-fi
+
+# XDG_DATA_HOME is intentionally left at its spec default ($HOME/.local/share).
+# It was once forced to a custom directory for a pre-installed Veryl toolchain;
+# since only verylup is shipped, tools create the default directory on demand.
 
 #----------------------------------------
 # Source user configs from $DESIGNS

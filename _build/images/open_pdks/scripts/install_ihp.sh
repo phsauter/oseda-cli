@@ -6,32 +6,49 @@
 set -e
 set -o pipefail
 export SCRIPT_DIR=$TOOLS/osic-multitool
+PDK_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd /tmp || exit 1
 
 if [ ! -d "$PDK_ROOT" ]; then
     mkdir -p "$PDK_ROOT"
 fi
 
-# Install IHP-SG13G2
+# Install the IHP PDKs
+# SG13CMOS5L moved into the SG13G2 repository with IHP-Open-PDK#1124, so both
+# PDKs are fetched here in one clone: one commit, one repo-level versions.txt,
+# and both trees side by side under $PDK_ROOT. What follows below is the
+# SG13G2 post-processing; the CMOS5L one lives in install_ihp_cmos5l.sh.
 PDK="ihp-sg13g2"
+PDK_CMOS5L="ihp-sg13cmos5l"
 IHP_REPO_URL="https://github.com/iic-jku/IHP-Open-PDK.git"
 
-echo "[INFO] Installing IHP SG13G2 PDK."
+echo "[INFO] Installing the IHP PDKs."
 git clone "$IHP_REPO_URL" ihp
 cd ihp || exit 1
 # For now uses branch "dev" to get the latest releases
 git checkout dev
 git submodule update --init --recursive
 
-# Now move to the proper location
-if [ -d "$PDK" ]; then
-	mv "$PDK" "$PDK_ROOT/$PDK"
-else
-	echo "[ERROR] PDK directory '$PDK' not found after clone!"
-	exit 1
-fi
+# Store git hash of installed PDK version for reference. Both PDKs come from
+# this one commit, so both get the same hash.
+PDK_COMMIT=$(git rev-parse HEAD)
 
-# Copy the repo-level `versions.txt` next to the PDK (at $PDK_ROOT) so the KLayout DRC/LVS version check can find it.
+# Now move both PDKs to the proper location. They have to end up side by side:
+# CMOS5L reaches into SG13G2 through relative symlinks (../../ihp-sg13g2/...)
+# that resolve at $PDK_ROOT exactly as they do inside the repository, because
+# a PDK directory sits one level below the repository root in both places.
+for pdk in "$PDK" "$PDK_CMOS5L"; do
+	if [ -d "$pdk" ]; then
+		mv "$pdk" "$PDK_ROOT/$pdk"
+		echo "$PDK_COMMIT" > "$PDK_ROOT/$pdk/COMMIT"
+	else
+		echo "[ERROR] PDK directory '$pdk' not found after clone!"
+		exit 1
+	fi
+done
+
+# Copy the repo-level `versions.txt` next to the PDKs (at $PDK_ROOT) so the KLayout DRC/LVS version check can find it.
+# One file serves both PDKs: run_drc.py resolves it as <PDK_ROOT>/versions.txt (Path(__file__).parents[5]) for either.
 # This is mandatory since commit: https://github.com/IHP-GmbH/IHP-Open-PDK/commit/d54e4a48a3d34c555a038b64a0869cd295134376
 if [ -f "versions.txt" ]; then
 	cp "versions.txt" "$PDK_ROOT/versions.txt"
@@ -40,11 +57,8 @@ else
 	exit 1
 fi
 
-# Store git hash of installed PDK version for reference
-PDK_COMMIT=$(git rev-parse HEAD)
-echo "$PDK_COMMIT" > "${PDK_ROOT}/${PDK}/COMMIT"
-
-# Cleanup cloned repo to save space
+# Cleanup cloned repo to save space. ihp-common/ and the Makefiles that stay
+# behind are the build infrastructure of the PDK repository, not part of a PDK.
 cd /tmp || exit 1
 rm -rf ihp
 
@@ -71,35 +85,26 @@ echo "source $SCRIPT_DIR/iic-magic-bindkeys" 	>> "$PDK_ROOT/$PDK/libs.tech/magic
 # Fix KLayout netlist import templates: make m= optional for all devices
 # (xschem omits m=1 when multiplicity equals the default value of 1)
 # Also accept nf= as alternative to ng= for MOSFET finger count.
+# CMOS5L ships its own copy of this file, so the fix lives in a shared helper
+# that install_ihp_cmos5l.sh runs as well.
 echo "[INFO] Fixing KLayout netlist import templates."
 TEMPLATES_FILE="$PDK_ROOT/$PDK/libs.tech/klayout/python/import_netlist/ihp130_pcell_templates.py"
 if [ -f "$TEMPLATES_FILE" ]; then
-    python3 - "$TEMPLATES_FILE" << 'PYEOF'
-import sys
-fname = sys.argv[1]
-with open(fname, 'r') as f:
-    content = f.read()
-# 1. Make m= optional in all regex patterns that currently require it.
-#    Use a placeholder to protect patterns that are already optional.
-old = r'(?=.*m=(?P<m>\d+))'
-new = r'(?:(?=.*m=(?P<m>\d+))|)'
-placeholder = '___OPTIONAL_M___'
-content = content.replace(new, placeholder)
-content = content.replace(old, new)
-content = content.replace(placeholder, new)
-# 2. Accept both ng= and nf= for MOSFET finger count
-#    (xschem may generate nf= in some symbol versions instead of ng=)
-content = content.replace(
-    r'(?=.*ng=(?P<ng>\d+))',
-    r'(?=.*(?:ng|nf)=(?P<ng>\d+))'
-)
-with open(fname, 'w') as f:
-    f.write(content)
-print(f"[INFO] Fixed KLayout netlist import templates in {fname}")
-PYEOF
+    python3 "$PDK_SCRIPT_DIR/fix_netlist_templates.py" "$TEMPLATES_FILE"
 else
     echo "[WARN] KLayout netlist import templates not found at $TEMPLATES_FILE"
 fi
+
+# Anchor the KLayout GUI DRC/LVS run directory to the layout file. The IHP menu
+# macros expand a relative run_dir against the working directory of the KLayout
+# process, so the same layout writes its reports to a different place depending
+# on how KLayout was started, and by default next to the GDS. The helper also
+# adds a %top_cell% placeholder, so one setting such as
+# ../verification/drc/%top_cell%.klayout.drc serves every cell of a project.
+# CMOS5L ships its own copies of these four macros rather than symlinks, so the
+# fix lives in a shared helper that install_ihp_cmos5l.sh runs as well.
+echo "[INFO] Fixing the KLayout GUI DRC/LVS run directory."
+python3 "$PDK_SCRIPT_DIR/fix_klayout_run_dir.py" "$PDK_ROOT/$PDK/libs.tech/klayout/tech/macros"
 
 # The IHP PDK renamed the IO netlist to libs.ref/sg13g2_io/spice/sg13g2_io.spice,
 # but several consumers still expect the old name sg13g2_io.spi:
@@ -111,6 +116,118 @@ IO_SPICE_DIR="$PDK_ROOT/$PDK/libs.ref/sg13g2_io/spice"
 if [ ! -e "$IO_SPICE_DIR/sg13g2_io.spi" ] && [ -e "$IO_SPICE_DIR/sg13g2_io.spice" ]; then
 	echo "[INFO] Adding sg13g2_io.spi -> sg13g2_io.spice compatibility symlink."
 	ln -s sg13g2_io.spice "$IO_SPICE_DIR/sg13g2_io.spi"
+fi
+
+# The sealring PCell stamps the PDK version into a label and obtains it by
+# shelling out to `git rev-parse` inside the PDK tree. There is no .git there
+# (both PDKs are moved out of the clone above), so git prints
+# "fatal: not a git repository" to stderr on every sealring instantiation and the
+# label ends up as "Unknown (Not a Git repo or Git not installed)". Use
+# the COMMIT file both IHP installers write next to the PDK instead, keep git as
+# the fallback with its stderr muted, and catch more than CalledProcessError --
+# a missing git binary raises an uncaught FileNotFoundError today. CMOS5L
+# symlinks this file into SG13G2, so patching it here covers both PDKs.
+echo "[INFO] Fixing the sealring PDK version lookup."
+UTILITY_FUNCTIONS="$PDK_ROOT/$PDK/libs.tech/klayout/python/sg13g2_pycell_lib/ihp/utility_functions.py"
+if [ -f "$UTILITY_FUNCTIONS" ]; then
+    python3 - "$UTILITY_FUNCTIONS" << 'PYEOF'
+import re
+import sys
+
+fname = sys.argv[1]
+with open(fname, 'r') as f:
+    content = f.read()
+
+if 'commit_file' in content:
+    print("[INFO] Sealring PDK version lookup already patched in %s" % fname)
+    sys.exit(0)
+
+# 1. Prefer the COMMIT file written by the installer. Walk up from the module
+#    towards the PDK root rather than hardcoding a depth, so this keeps working
+#    for the CMOS5L symlink and if the tree is ever rearranged.
+anchor = "        script_dir = os.path.dirname(script_path)\n"
+lookup = anchor + """
+        # The PDK is installed without its .git, so prefer the COMMIT file the
+        # installer writes next to it (see install_ihp.sh).
+        probe = script_dir
+        for _ in range(8):
+            probe = os.path.dirname(probe)
+            commit_file = os.path.join(probe, "COMMIT")
+            if os.path.isfile(commit_file):
+                with open(commit_file) as f:
+                    return f.read().strip()
+"""
+n_lookup = content.count(anchor)
+content = content.replace(anchor, lookup)
+
+# 2. Keep git as the fallback, but do not let it write to the console.
+content, n_stderr = re.subn(
+    r"(\['git', '-C', \w+, 'rev-parse', [^\]]+\])\n(\s*)\)",
+    r"\1, stderr=subprocess.DEVNULL\n\2)",
+    content,
+)
+
+# 3. A missing git binary raises FileNotFoundError, which is not caught today.
+content, n_except = re.subn(
+    r'except subprocess\.CalledProcessError:',
+    'except Exception:',
+    content,
+)
+
+if n_lookup and n_stderr == 2 and n_except:
+    with open(fname, 'w') as f:
+        f.write(content)
+    print("[INFO] Fixed the sealring PDK version lookup in %s" % fname)
+else:
+    print("[WARN] Sealring PDK version lookup not patched in %s "
+          "(already fixed upstream?)" % fname)
+PYEOF
+else
+    echo "[WARN] KLayout PCell utility functions not found at $UTILITY_FUNCTIONS"
+fi
+
+# isolbox defaults its length and width to techparams['isolbox_defLW'] = 3u,
+# while its own callback clamps both to 3.6u for the default wellwidth of 1.05u
+# (callbacks/isolbox_cb.tcl). Every instantiation with default parameters
+# therefore prints "WARNING: wrong width/length: using minimum ... 3.6u!!". The
+# neighbouring defaults in isolbox_code.py already assume 3.6u (defA = 12.96p =
+# 3.6 x 3.6, defP = 14.4u = 2 x (3.6 + 3.6)), so the tech parameter is simply
+# stale. SG13G2 only: CMOS5L ships no isolbox.
+echo "[INFO] Fixing the isolbox default length/width."
+for tech_json in sg13g2_tech.json sg13g2_tech_mod.json; do
+    TECH_JSON="$PDK_ROOT/$PDK/libs.tech/klayout/python/sg13g2_pycell_lib/$tech_json"
+    if [ ! -f "$TECH_JSON" ]; then
+        echo "[WARN] KLayout PCell tech parameters not found at $TECH_JSON"
+    elif grep -q '"isolbox_defLW": *"3u"' "$TECH_JSON"; then
+        sed -i 's/"isolbox_defLW": *"3u"/"isolbox_defLW": "3.6u"/' "$TECH_JSON"
+        echo "[INFO] Set isolbox_defLW to 3.6u in $TECH_JSON"
+    else
+        echo "[WARN] isolbox_defLW not patched in $TECH_JSON (already fixed upstream?)"
+    fi
+done
+
+# The CNI foreground booleans (dbLayerXor and friends, see ihp/geometry.py)
+# consume their operands, and several PCells destroy those operands again right
+# afterwards. The second destroy() is a no-op on correct geometry, but it logs a
+# warning, and the ~35 lines of "Box.destroy: already destroyed!" per run bury
+# the messages that matter. Demote them from Logger.warn to Logger.log, the only
+# one of the three that is verbosity-gated (Logger.info still prints at the
+# default verbosity of 0), so the message stays available with `klayout -d`.
+# Dropping the redundant destroy() calls scattered over the PCell sources is
+# upstream's to make.
+# CMOS5L symlinks the whole pycell4klayout-api tree, so this covers both PDKs.
+echo "[INFO] Demoting the CNI double-destroy warnings."
+CNI_DIR="$PDK_ROOT/$PDK/libs.tech/klayout/python/pycell4klayout-api/source/python/cni"
+if [ -d "$CNI_DIR" ]; then
+    for cni_file in box ellipse path polygon text; do
+        CNI_FILE="$CNI_DIR/$cni_file.py"
+        if [ -f "$CNI_FILE" ] && grep -q 'pya.Logger.warn(f".*already destroyed!")' "$CNI_FILE"; then
+            sed -i 's/pya\.Logger\.warn(\(f".*already destroyed!"\))/pya.Logger.log(\1)/' "$CNI_FILE"
+            echo "[INFO] Demoted the double-destroy warning in $CNI_FILE"
+        fi
+    done
+else
+    echo "[WARN] CNI shape classes not found at $CNI_DIR"
 fi
 
 # Remove testing folders to save space
@@ -125,9 +242,8 @@ find . -name "*.mdm" -print0 | xargs -0 rm -rf
 # Remove measurement folder to save space
 rm -rf "$PDK_ROOT/$PDK/libs.doc/meas"
 
-#FIXME gzip Liberty (.lib) files
-#FIXME cd "$PDK_ROOT/$PDK/libs.ref"
-#FIXME find . -name "*.lib" -exec gzip {} \;
+# gzip Liberty (.lib) files
+bash "$PDK_SCRIPT_DIR/gzip_liberty.sh" "$PDK_ROOT/$PDK"
 
 # Perform required preparation of IHP PDK for use with VACASK
 echo "[INFO] Preparing IHP PDK for VACASK."

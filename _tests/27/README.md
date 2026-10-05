@@ -38,23 +38,28 @@ debugging a regression.
 | ---------------- | ------------------------------------------------------------ | ------ |
 | sky130A          | `skywater130`                                                 | 18     |
 | gf180mcuD        | `gf180mcu` + `gf180mcu_klayoutapi` + `gf180mcu_sealring`      | 61     |
-| ihp-sg13g2       | `SG13_dev` + `SG13_native_pcell_lib`                          | 34     |
-| ihp-sg13cmos5l   | `SG13_dev`                                                    | 24     |
+| ihp-sg13g2       | `SG13_dev` + `SG13_native_pcell_lib`                          | 38     |
+| ihp-sg13cmos5l   | `SG13_dev` + `SG13_native_pcell_lib`                          | 26     |
+
+Both IHP PDKs are installed from a branch and not from a pinned commit, so a
+rebuild can pick up new devices and move these numbers. That is what the count
+check is for: it turns a silent inventory change into a failure that has to be
+looked at. Most recently the metal fringe MoM capacitor `cap_cmomf` (2026-08-11)
+took SG13G2 from 37 to 38 and, together with `guard_ring`, CMOS5L from 24 to 26.
 
 ## Expected-dirty baselines
 
-A few PCells produce an **empty** cell with their default parameters. They are
-pinned in `check_pcells.py` (`known_bad`, keyed by `<library>/<pcell>`) so the
-test is green on the current image while still failing on any regression. If a
-PDK update changes one of these verdicts, the test flags it so the baseline can
-be reviewed (relaxed, tightened, or removed once fixed upstream):
+PCells that produce an **empty** cell with their default parameters are pinned in
+`check_pcells.py` (`known_bad`, keyed by `<library>/<pcell>`) so the test is green
+on the current image while still failing on any regression. If a PDK update
+changes one of these verdicts, the test flags it so the baseline can be reviewed
+(relaxed, tightened, or removed once fixed upstream).
 
-- **gf180mcuD `gf180mcu_klayoutapi/efuse`**: `draw_efuse()` is called without its
-  required `device_name` argument and raises `TypeError`.
-
-The classic `gf180mcu` library produces the same devices correctly, and the IHP
-PDKs (`ihp-sg13g2`, `ihp-sg13cmos5l`) as well as sky130A instantiate all their
-PCells cleanly.
+There is currently no such PCell: every PDK instantiates all of its PCells (bar
+the runaways below) with geometry. `gf180mcu_klayoutapi/efuse` was pinned here
+until `_build/images/open_pdks/patches/gf180mcu-efuse.patch` fixed the two bugs
+behind it — `draw_efuse()` called without its required `device_name`, and an
+`efuse.gds` path pointing into `/home/$USER/.klayout`, where nothing installs it.
 
 ## Runaway PCells
 

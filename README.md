@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="_logo/svg/logo-horizontal-reversed.svg">
+    <source media="(prefers-color-scheme: light)" srcset="_logo/svg/logo-horizontal.svg">
+    <img src="_logo/svg/logo-horizontal.svg" alt="IIC-OSIC-TOOLS" width="480">
+  </picture>
+</p>
+
 # IIC-OSIC-TOOLS
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14387234.svg)](https://doi.org/10.5281/zenodo.14387234)
@@ -31,6 +39,7 @@
       - [4.5.1 Add it to project](#451-add-it-to-project)
   - [5. Using the Container with](#5-using-the-container-with)
     - [5.1 Podman](#51-podman)
+      - [5.1.1 SELinux (Fedora, RHEL and Clones)](#511-selinux-fedora-rhel-and-clones)
     - [5.2 Distrobox](#52-distrobox)
   - [6. Support with Issues/Problems/Bugs](#6-support-with-issuesproblemsbugs)
 
@@ -102,6 +111,8 @@ If you know what you are doing and want full root access without a graphical int
 ```bash
 ./start_shell.sh
 ```
+
+This mode is deliberately shell-only: it forwards no X11/Wayland socket and no X authority cookie, so GUI tools started from that shell fall back to text mode. Use `./start_x.sh` or `./start_vnc.sh` for graphical work.
 
 ## 2. Installed PDKs
 
@@ -184,6 +195,7 @@ Below is a list of the current tools/PDKs already installed and ready to use:
 - [gaw3-xschem](https://github.com/StefanSchippers/xschem-gaw) waveform plot tool for `xschem`
 - [gds2palace](https://github.com/VolkerMuehlhaus/setupEM)/`setupEM` setup tools for `palace` EM simulation
 - [gds3d](https://github.com/trilomix/GDS3D) a 3D viewer for GDS files
+- [gdscheck](https://github.com/aesc-silicon/gdscheck) Rust DRC engine for GDSII layouts, with rules in YAML decks and a KLayout-compatible report database as output (IHP `SG13G2` and `SG13CMOS5L`)
 - [gdsfactory](https://github.com/gdsfactory/gdsfactory) Python library for GDS generation
 - [gdsfill](https://github.com/aesc-silicon/gdsfill) Rust tool for inserting dummy metal fill into semiconductor layouts
 - [gdspy](https://github.com/heitzmann/gdspy) Python module for the creation and manipulation of GDS files
@@ -193,8 +205,9 @@ Below is a list of the current tools/PDKs already installed and ready to use:
 - [gmsh](https://gmsh.info/) three-dimensional finite element mesh generator
 - [gtkwave](https://github.com/gtkwave/gtkwave) waveform plot tool for digital simulation
 - [hdl21](https://github.com/dan-fritchman/Hdl21) analog hardware description library
+- [icestorm](https://github.com/YosysHQ/icestorm) bitstream tools for Lattice iCE40 FPGAs, providing `icepack` and `iceprog`
 - [ihp-sg13g2](https://github.com/IHP-GmbH/IHP-Open-PDK) IHP Microelectronics 130 nm SiGe:C BiCMOS PDK (partial PDK, not fully supported yet; `xschem` and `ngspice` simulation works incl. PSP MOSFET model)
-- [ihp-sg13cmos5l](https://github.com/IHP-GmbH/ihp-sg13cmos5l) IHP Microelectronics 130 nm CMOS PDK (M1-M4-TM1 metal stack)
+- [ihp-sg13cmos5l](https://github.com/IHP-GmbH/IHP-Open-PDK) IHP Microelectronics 130 nm CMOS PDK (M1-M4-TM1 metal stack), shipped in the same repository as `ihp-sg13g2`
 - [irsim](https://github.com/rtimothyedwards/irsim) switch-level digital simulator
 - [iverilog](https://github.com/steveicarus/iverilog) Verilog simulator
 - [kactus2](https://github.com/kactus2/kactus2dev) Kactus2 is a graphical editor for IP-XACT files, which are used to describe hardware components and their interfaces
@@ -206,6 +219,7 @@ Below is a list of the current tools/PDKs already installed and ready to use:
 - [magic](https://github.com/rtimothyedwards/magic) layout editor with DRC and PEX
 - [najaeda](https://github.com/najaeda/naja) data structures and APIs for the development of post logic synthesis EDA algorithms
 - [netgen](https://github.com/rtimothyedwards/netgen) netlist comparison (LVS)
+- [nextpnr](https://github.com/YosysHQ/nextpnr) FPGA place-and-route for Lattice iCE40 (`nextpnr-ice40`) and Lattice ECP5 (`nextpnr-ecp5`)
 - [ngspice](http://ngspice.sourceforge.net) SPICE analog and mixed-signal simulator, with OSDI support
 - [ngspyce](https://github.com/ignamv/ngspyce) Python bindings for `ngspice`
 - [nvc](https://github.com/nickg/nvc) VHDL simulator and compiler
@@ -218,6 +232,7 @@ Below is a list of the current tools/PDKs already installed and ready to use:
 - [osic-multitool](https://github.com/iic-jku/osic-multitool) collection of useful scripts and documentation
 - [padring](https://github.com/donn/padring) padring generation tool
 - [palace](https://github.com/awslabs/palace) 3D finite element solver for computational electromagnetics
+- [prjtrellis](https://github.com/YosysHQ/prjtrellis) bitstream tools and database for Lattice ECP5 FPGAs, providing `ecppack`
 - [pulp-tools](https://github.com/pulp-platform/pulp) PULP platform tools consisting of [bender](https://github.com/pulp-platform/bender), [verible](https://github.com/chipsalliance/verible), and [sv2v](https://github.com/zachjs/sv2v)
 - [pygmid](https://github.com/dreoilin/pygmid) Python version of the gm/Id starter kit from Boris Murmann
 - [pyopus](https://codeberg.org/arpadbuermen/PyOPUS) simulation runner and optimization tool for analog circuits
@@ -290,19 +305,23 @@ On Windows, you can use the equivalent batch script (if the defaults are accepta
 .\start_vnc.bat
 ```
 
-You can now access the Desktop Environment through your browser ([http://localhost](http://localhost)). The default password is `abc123`.
+You can now access the Desktop Environment through your browser at `http://localhost:<WEBSERVER_PORT>/?password=abc123`, where `abc123` is the default password. `WEBSERVER_PORT` defaults to `80` (so plain [http://localhost](http://localhost) works), except with rootless Podman — including on macOS and Windows — where it defaults to `8080`; the start scripts print the exact URL. Omit the `?password=` part to be prompted for it instead.
+
+The browser session uses the full noVNC client, whose control bar (the small tab on the left edge) provides clipboard transfer to and from the container, fullscreen, ctrl-alt-del, and connection settings. By default the container desktop resizes to match the browser window; change "Scaling Mode" in the settings panel if you prefer a fixed resolution, and your choice is remembered.
 
 #### 4.2.1 Variables for VNC
 
 Both scripts will use default settings, which you can tweak by settings shell variables (`VARIABLE=default` is shown):
 
 - `DRY_RUN` (unset by default); if set to any value (also `0`, `false`, etc.), the start scripts print all executed commands instead of running. Useful for debugging/testing or just creating "template commands" for unique setups.
-- `CONTAINER_ENGINE` (auto-detected) selects the container engine CLI. By default, `docker` is used if installed, otherwise `podman`. Set it explicitly (e.g. `CONTAINER_ENGINE=podman`) if both engines are installed and you want to override the default.
+- `CONTAINER_ENGINE` (auto-detected) selects the container engine CLI. `install.sh` records the engine you picked in `$HOME/.config/iic-osic-tools/env`, which the start scripts source; without that file, `docker` is used if installed, otherwise `podman`. A value set in the environment always wins (e.g. `CONTAINER_ENGINE=podman ./start_x.sh`).
+- `IIC_OSIC_TOOLS_SELINUX_LABEL` (unset by default) controls the SELinux workaround on Fedora/RHEL hosts, see [5.1.1 SELinux (Fedora, RHEL and Clones)](#511-selinux-fedora-rhel-and-clones).
+- `IIC_OSIC_TOOLS_NO_STARTUP_CHECK` (unset by default); if set to any value, the start scripts skip the few seconds they otherwise spend verifying that the container is still running after the start.
 - `DESIGNS=$HOME/eda/designs` (`DESIGNS=%USERPROFILE%\eda\designs` for `.bat`) sets the directory that holds your design files. This directory is mounted into the container on `/foss/designs`.
 - `WEBSERVER_PORT=80` sets the port on which the Docker daemon will map the webserver port of the container to be reachable from localhost and the outside world. `0` disables the mapping. With rootless Podman (which cannot bind ports below 1024) the default is `8080`.
 - `VNC_PORT=5901` sets the port on which the Docker daemon will map the VNC server port of the container to be reachable from localhost and the outside world. This is only required to access the UI with a different VNC client. `0` disabled the mapping.
-- `DOCKER_REGISTRY="docker.io"` registry prefix used to fully qualify the image name (required for Podman, which does not resolve short names non-interactively). Set it to `""` to use unqualified names.
-- `DOCKER_USER="hpretl"` username for the Docker Hub repository from which the images are pulled. Usually, no change is required.
+- `DOCKER_REGISTRY="docker.io"` registry prefix used to fully qualify the image name (required for Podman, which does not resolve short names non-interactively). The prefix is skipped automatically when `DOCKER_USER` already names a registry (i.e. it contains a `.` or a `:`, or is `localhost`). Set it to `none` (the `.sh` scripts also accept `""`) to force unqualified names.
+- `DOCKER_USER="hpretl"` username for the Docker Hub repository from which the images are pulled. Usually, no change is required. To pull from a private registry, either set it to the registry (e.g. `DOCKER_USER="myregistry.example.com:5000"`, optionally followed by a namespace such as `ghcr.io/hpretl`), or put the registry in `DOCKER_REGISTRY` and leave `DOCKER_USER` empty, which means the image sits at the root of the registry. Emptying it works as `DOCKER_USER=""` for the `.sh` scripts; for the `.bat` scripts `cmd` treats an empty variable as unset, so the default has to be emptied in the script itself.
 - `DOCKER_IMAGE="iic-osic-tools"` Docker Hub image name to pull. Usually, no change is required.
 - `DOCKER_TAG="latest"` Docker Hub image tag. By default, it pulls the latest version; this might be handy to change if you want to match a specific version set.
 - `CONTAINER_USER=$(id -u)` (the current user's ID, `CONTAINER_USER=1000` for `.bat`) The user ID (and also group ID) is especially important on Linux and macOS because those are the IDs used to write files in the `DESIGNS` directory. For debugging/testing, the user and group ID can be set to `0` to gain root access inside the container.
@@ -338,10 +357,12 @@ or
 The following environment variables are used for configuration:
 
 - `DRY_RUN` (unset by default), if set to any value (also `0`, `false`, etc.), makes the start scripts print all executed commands instead of running. Useful for debugging/testing or just creating "template commands" for unique setups.
-- `CONTAINER_ENGINE` (auto-detected) selects the container engine CLI. By default, `docker` is used if installed, otherwise `podman`. Set it explicitly (e.g. `CONTAINER_ENGINE=podman`) if both engines are installed and you want to override the default.
+- `CONTAINER_ENGINE` (auto-detected) selects the container engine CLI. `install.sh` records the engine you picked in `$HOME/.config/iic-osic-tools/env`, which the start scripts source; without that file, `docker` is used if installed, otherwise `podman`. A value set in the environment always wins (e.g. `CONTAINER_ENGINE=podman ./start_x.sh`).
+- `IIC_OSIC_TOOLS_SELINUX_LABEL` (unset by default) controls the SELinux workaround on Fedora/RHEL hosts, see [5.1.1 SELinux (Fedora, RHEL and Clones)](#511-selinux-fedora-rhel-and-clones).
+- `IIC_OSIC_TOOLS_NO_STARTUP_CHECK` (unset by default); if set to any value, the start scripts skip the few seconds they otherwise spend verifying that the container is still running after the start.
 - `DESIGNS=$HOME/eda/designs` (`DESIGNS=%USERPROFILE%\eda\designs` for `.bat`) sets the directory that holds your design files. This directory is mounted into the container on `/foss/designs`.
-- `DOCKER_REGISTRY="docker.io"` registry prefix used to fully qualify the image name (required for Podman, which does not resolve short names non-interactively). Set it to `""` to use unqualified names.
-- `DOCKER_USER="hpretl"` username for the Docker Hub repository from which the images are pulled. Usually, no change is required.
+- `DOCKER_REGISTRY="docker.io"` registry prefix used to fully qualify the image name (required for Podman, which does not resolve short names non-interactively). The prefix is skipped automatically when `DOCKER_USER` already names a registry (i.e. it contains a `.` or a `:`, or is `localhost`). Set it to `none` (the `.sh` scripts also accept `""`) to force unqualified names.
+- `DOCKER_USER="hpretl"` username for the Docker Hub repository from which the images are pulled. Usually, no change is required. To pull from a private registry, either set it to the registry (e.g. `DOCKER_USER="myregistry.example.com:5000"`, optionally followed by a namespace such as `ghcr.io/hpretl`), or put the registry in `DOCKER_REGISTRY` and leave `DOCKER_USER` empty, which means the image sits at the root of the registry. Emptying it works as `DOCKER_USER=""` for the `.sh` scripts; for the `.bat` scripts `cmd` treats an empty variable as unset, so the default has to be emptied in the script itself.
 - `DOCKER_IMAGE="iic-osic-tools"` Docker Hub image name to pull. Usually, no change is required.
 - `DOCKER_TAG="latest"` Docker Hub image tag. By default, it pulls the latest version; this might be handy to change if you want to match a specific Version set.
 - `CONTAINER_USER=$(id -u)` (the current user's ID, `CONTAINER_USER=1000` for `.bat`) The user ID (and also group ID) is especially important on Linux and macOS because those are the IDs used to write files in the `DESIGNS` directory.
@@ -386,14 +407,14 @@ It is strongly recommended enabling OpenGL:
 There are multiple ways to configure the start scripts using Bash. Two of them are shown here. First, the variables can be set directly for each run of the script; they are not saved in the active session:
 
 ```bash
-DESIGNS=/my/design/directory DOCKER_USERNAME=another_user ./start_x.sh
+DESIGNS=/my/design/directory DOCKER_USER=another_user ./start_x.sh
 ```
 
 The second variant is to set the variables in the current shell session (not persistent between shell restarts or shared between sessions):
 
 ```bash
 export DESIGNS=/my/design/directory
-export DOCKER_USERNAME=another_user
+export DOCKER_USER=another_user
 ./start_x.sh
 ```
 
@@ -405,7 +426,7 @@ In `CMD` you can't set the variables directly when running the script. So for th
 
 ```batch
 SET DESIGNS=\my\design\directory
-SET DOCKER_USERNAME=another_user
+SET DOCKER_USER=another_user
 .\start_x.bat
 ```
 
@@ -431,7 +452,7 @@ Either way, the great thing is that you can now commit the file to repository an
 
 ## 5. Using the Container with
 
-The IIC-OSIC-Tools are meant to be beginner friendly. If you have limited knowledge of the tools involved (Docker, Podman, etc..), we suggest you follow [4. Quick Launch for Designers](#4-quick-launch-for-designers).
+The IIC-OSIC-TOOLS are meant to be beginner friendly. If you have limited knowledge of the tools involved (Docker, Podman, etc..), we suggest you follow [4. Quick Launch for Designers](#4-quick-launch-for-designers).
 For container experts, there is also support for other container engines and additional tools, see the subsections below.
 
 ### 5.1 Podman
@@ -440,9 +461,10 @@ For container experts, there is also support for other container engines and add
 
 The start scripts automatically handle the classic Podman pitfalls:
 
-- In rootless mode, they add `--userns=keep-id` (unless a `--userns` option is already given via `DOCKER_EXTRA_PARAMS`), so the host user launching the container is mapped to the same UID/GID inside the container, preventing access issues between the container and mounted directories from the host.
-- Since rootless mode cannot bind host ports below 1024, `start_vnc.sh` defaults the webserver port to `8080` instead of `80` (an explicitly set `WEBSERVER_PORT` below 1024 produces a warning).
+- In rootless mode on Linux, they add `--userns=keep-id` (unless a `--userns` option is already given via `DOCKER_EXTRA_PARAMS`), so the host user launching the container is mapped to the same UID/GID inside the container, preventing access issues between the container and mounted directories from the host. On macOS and Windows the bind mount passes through the Podman machine VM, which does the ID mapping itself, so `keep-id` is not added there.
+- Since rootless mode cannot bind host ports below 1024, `start_vnc.sh` defaults the webserver port to `8080` instead of `80` (an explicitly set `WEBSERVER_PORT` below 1024 produces a warning). This also applies on macOS and Windows, where the Podman machine VM runs rootless by default and its `rootlessport` helper enforces the same limit.
 - `start_vnc.sh` passes `--sysctl net.ipv4.ip_unprivileged_port_start=0` to Podman (rootful and rootless). Docker sets this namespaced sysctl in every container by default, Podman does not — without it, the noVNC webserver (which runs as a non-root user) cannot bind port 80 *inside* the container and the VNC mode fails.
+- On SELinux hosts they add `--security-opt label=disable`, see [5.1.1 SELinux (Fedora, RHEL and Clones)](#511-selinux-fedora-rhel-and-clones).
 
 So in most cases, simply running `./start_<mode>.sh` works out of the box with Podman.
 
@@ -454,14 +476,58 @@ As a safety net, the request is ignored (with a warning) if no passwd entry exis
 
 > **Note on Docker Rootless Mode:** Docker in rootless mode has known limitations with X11/Wayland socket forwarding due to UID/GID mismatches between the host and container. There is no straightforward fix for Docker rootless mode, and we therefore recommend using Podman with `--userns=keep-id` as the preferred solution for rootless container operation.
 
+#### 5.1.1 SELinux (Fedora, RHEL and Clones)
+
+On hosts with SELinux the container process runs as `container_t`, while bind-mounted host paths keep their host label. SELinux then denies the container access to them: the X11 socket and the Wayland socket are labelled `user_tmp_t`, and the designs directory is labelled `user_home_t`. This affects every launch mode:
+
+| Mode | Symptom without the workaround |
+| --- | --- |
+| `start_x.sh` | No terminal window appears, and the container exits a few seconds after the start. |
+| `start_vnc.sh` | The desktop comes up, but `/foss/designs` is inaccessible. |
+| `start_jupyter.sh` | The notebook server comes up, but `/foss/designs` is inaccessible. |
+| `start_shell.sh` | The shell works, but `/foss/designs` is inaccessible. (That GUI tools stay in text mode here is by design, this mode forwards no X11/Wayland socket.) |
+
+The matching denial in `sudo ausearch -m avc -ts recent` looks like this (see [issue #352](https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/352)):
+
+```text
+avc: denied { write } for pid=23821 comm="xfce4-terminal" name="X0" dev="tmpfs" ino=39
+scontext=system_u:system_r:container_t:s0:c546,c994
+tcontext=unconfined_u:object_r:user_tmp_t:s0 tclass=sock_file permissive=0
+```
+
+The start scripts therefore add `--security-opt label=disable` whenever the host kernel has SELinux enabled, in enforcing as well as in permissive mode. This applies to Podman and to Docker (Docker only labels containers when the daemon runs with `"selinux-enabled": true`, but where labelling is off the option is simply a no-op), and it is skipped if `DOCKER_EXTRA_PARAMS` already carries a `--security-opt label=…` option.
+
+This switches off SELinux **type enforcement for this one container**. Seccomp, capabilities, cgroups, the user namespace and rootless mode are unaffected, and nothing on the host is relabelled. The alternative, relabelling the mounted paths with `:z`, is not an option here: `/tmp/.X11-unix` and `/run/user/$UID` belong to the host session, relabelling them would let *any* container talk to your X server, and both live on tmpfs, so it would have to be repeated after every login.
+
+The behavior can be changed with `IIC_OSIC_TOOLS_SELINUX_LABEL`:
+
+| Value | Effect |
+| --- | --- |
+| unset (default) | Auto-detect, and add `--security-opt label=disable` on SELinux hosts. |
+| set to empty | Never add a label option. |
+| set to a value | Always add `--security-opt label=<value>`, e.g. `type:container_runtime_t`. |
+
+To keep type enforcement on instead, switch the workaround off and relabel the designs directory by hand (this makes `/foss/designs` work, but **not** the X11 mode):
+
+```bash
+export IIC_OSIC_TOOLS_SELINUX_LABEL=
+chcon -Rt container_file_t "$HOME/eda/designs"   # undo with: restorecon -R -v "$HOME/eda/designs"
+```
+
+Container options are fixed when a container is created, so a container created before this fix cannot pick the option up on restart. Press `r` at the prompt to remove it (or run `podman rm iic-osic-tools_xserver_uid_$(id -u)`), then start the script again to re-create it. With an older checkout, the option can be passed by hand:
+
+```bash
+DOCKER_EXTRA_PARAMS="--security-opt label=disable" ./start_x.sh
+```
+
 ### 5.2 Distrobox
 
 [Distrobox](https://distrobox.it) is a *fancy wrapper around Podman or Docker to create and start containers highly integrated with the hosts*. Like the `start_x` scripts, Distrobox manages the forwarding of X11/Wayland to the container, but allows for even more tight integration, by also forwarding the users home directory, and seamlessly integration other services like the systemd journal, D-Bus etc...
 Distrobox specifically mentions that its main focus lies on integration, and not on sandboxing and security.
 
-The IIC-OSIC-Tools support the usage of Distrobox, even though the usage is slightly different, compared to the start scripts. Noteably, the /headless is not the in-container-user's home directory, and /foss/designs will not be mounted. But `/home/<username>` will have full access to the users home directory.
+The IIC-OSIC-TOOLS support the usage of Distrobox, even though the usage is slightly different, compared to the start scripts. Noteably, the /headless is not the in-container-user's home directory, and /foss/designs will not be mounted. But `/home/<username>` will have full access to the users home directory.
 
-A IIC-OSIC-Tools Distrobox can be started and accessed with:
+A IIC-OSIC-TOOLS Distrobox can be started and accessed with:
 
 `distrobox create -n iic-osic-tools -i hpretl/iic-osic-tools:latest`
 `distrobox enter iic-osic-tools`

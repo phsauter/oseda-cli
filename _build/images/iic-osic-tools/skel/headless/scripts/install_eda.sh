@@ -13,6 +13,20 @@ set -e
 # Linux-aarch64 wheel, so a forced PyPI reinstall would fail on arm64
 PIP_FLAGS="--upgrade --no-cache-dir --break-system-packages"
 
+# Nothing below reads PIP_NO_CACHE_DIR -- pip itself does: every pip option has
+# a PIP_<OPTION> environment variable equivalent, so this is the same as adding
+# --no-cache-dir to every pip run, including ones this script never spells out.
+#
+# That is the point, because the flag in PIP_FLAGS only covers the outer pip.
+# It is not always handed down to the nested pip that PEP 517 build isolation
+# runs to fetch a package's build dependencies. The venvs below are the clearest
+# case: "python3 -m venv" bootstraps the pip bundled with CPython (24.0), which
+# does not forward the flag, so building the git+ packages pulls setuptools,
+# virtualenv, distlib, dulwich, numpy, ... straight into $HOME/.cache/pip. With
+# HOME=/headless during the build that left ~55 MB of download residue in the
+# image. An environment variable IS inherited by those nested invocations.
+export PIP_NO_CACHE_DIR=1
+
 echo "[INFO] Install EDA packages via APT"
 apt-get update
 apt-get install -y \
@@ -40,46 +54,92 @@ pip3 install $PIP_FLAGS --ignore-installed \
 # WASM-based amaranth-yosys + wasmtime (~75 MB); amaranth uses the native
 # yosys from PATH instead
 pip3 install $PIP_FLAGS \
-	"amaranth==0.5.9" \
+	"amaranth==0.5.10" \
 	cace==2.11.0 \
 	chipify==0.2.2 \
 	ciel==2.6.1 \
-	cocotb==2.0.1 \
+	cocotb==2.1.0 \
 	cocotbext-ams==0.1.0 \
 	edalize==0.6.8 \
 	fault-dft==0.9.4 \
-	fusesoc==2.4.6 \
-	gds2palace==0.3.0 \
-	gdsfactory==9.46.0 \
-	gdsfill==0.1.8 \
+	fusesoc==2.4.7 \
+	gds2palace==0.5.2 \
+	gdsfactory==9.51.0 \
 	gdspy==1.6.13 \
 	jsonschema2md==1.7.0 \
-	klayout-pex==0.3.12 \
+	klayout-pex==0.4.4 \
 	klayout-vector-file-export-cli==0.5 \
 	lctime==0.0.26 \
-	librelane==3.1.0.dev2 \
-	najaeda==0.7.17 \
+	librelane==3.1.0.dev3 \
+	najaeda==0.7.24 \
 	pygmid==1.2.12 \
-	pyrtl==1.0.2 \
-	pyuvm==4.0.1 \
+	pyrtl==1.0.3 \
+	pyuvm==5.0.0 \
 	pyverilog==1.3.0 \
 	"schemdraw[svgmath]==0.23" \
-	scikit-rf==2.0.1 \
-	setupEM==0.1.22 \
-	siliconcompiler==0.38.2 \
-	snp2le==0.1.5 \
+	scikit-rf==2.1.0 \
+	setupEM==0.8.2 \
+	siliconcompiler==0.38.9 \
+	snp2le==0.1.9 \
 	spicelib==1.6.3 \
 	spyci==1.0.2
+
+# librelane's Toolbox.get_lib_voltage() is the only Liberty reader in the flow
+# that opens the file with a plain open(), so with the PDKs' LIB pointing at
+# .lib.gz (see open_pdks/scripts/gzip_liberty.sh) OpenROAD.IRDropReport -- the
+# LAST step of the Classic flow -- dies with
+#   RuntimeError: Syntax error in liberty file on line 1.  Unexpected token:
+# after synthesis, routing, RCX and post-PnR STA have all passed. Reported as
+# librelane/librelane#627. The patch header explains why librelane's own
+# gzopen() does not fix it (libparse reads through fileno()).
+#
+# The patch is deliberately NOT forgiving: if a librelane bump changes that
+# function, `patch` fails and the build stops, which is the signal to re-check
+# whether the fix landed upstream and this block can go.
+echo "[INFO] Patching librelane get_lib_voltage() to read gzipped Liberty"
+LIBRELANE_SITE=$(python3 -c 'import importlib.util as u, os; print(os.path.dirname(os.path.dirname(u.find_spec("librelane").origin)))')
+LIBRELANE_TOOLBOX="${LIBRELANE_SITE}/librelane/common/toolbox.py"
+[ -f "$LIBRELANE_TOOLBOX" ] || { echo "[ERROR] librelane toolbox.py not found"; exit 1; }
+patch -p0 --batch -r - -d "$LIBRELANE_SITE" < /headless/scripts/patches/librelane-get-lib-voltage-gzip.patch
+python3 -m py_compile "$LIBRELANE_TOOLBOX"
 
 # The four packages pulling in PySide6 (chipify, snp2le, gds2palace, setupEM)
 # only use QtWidgets/QtCore/QtGui/QtSvg, all of which live in
 # PySide6-Essentials. The PySide6-Addons half (~340 MB, dominated by a 254 MB
 # embedded Chromium in QtWebEngine, plus Qt3D/Quick3D/Designer/Multimedia) is
-# not imported by anything in the image, so remove it. Essentials stays, so
-# the GUIs keep working; pip check will note the PySide6 meta-package wants
-# Addons, which is harmless at runtime.
+# not imported by anything in the image, so remove it.
+#
+# Catch: the Essentials and Addons wheels BOTH ship the shared top-level PySide6
+# files (PySide6/__init__.py, _config.py, __feature__.py, _git_pyside_version.py),
+# and pip does no cross-package refcounting -- so "pip uninstall PySide6-Addons"
+# also deletes the PySide6/__init__.py that Essentials still needs. That leaves
+# PySide6 importable only as a namespace package with no __version__, which breaks
+# matplotlib's Qt backend ("cannot import name '__version__' from 'PySide6'") and
+# every GUI built on it. So force-reinstall Essentials afterwards to rewrite the
+# shared files (--no-deps stops Addons from being pulled back in).
+#
+# The PySide6 meta-package is kept on purpose: gds2palace and setupEM depend on it
+# by name, so removing it would leave their dependency unsatisfied. pip check will
+# note the meta-package wants Addons, which is harmless at runtime.
 echo "[INFO] Removing unused PySide6-Addons (QtWebEngine, Qt3D, ...)"
+# Pin the reinstall to the version already resolved above, so it cannot pull a
+# newer PySide6-Essentials that mismatches the installed shiboken6.
+PYSIDE6_VER=$(pip3 show PySide6-Essentials | awk '/^Version:/{print $2}')
+[ -n "$PYSIDE6_VER" ] || { echo "[ERROR] PySide6-Essentials not installed"; exit 1; }
 pip3 uninstall -y --break-system-packages PySide6-Addons
+pip3 install $PIP_FLAGS --no-deps --force-reinstall "PySide6-Essentials==${PYSIDE6_VER}"
+
+# What is left of PySide6 is still the largest Qt stack in the image, several
+# times the size of the system Qt6 that the C++ tools share. Two directories of
+# it are dead weight here:
+#   Qt/translations (~59 MB) -- Qt's own UI translations, loaded only when an
+#     application installs a QTranslator from that path; the image is English.
+#   Qt/qml (~35 MB) -- QML module plugins for QtQuick. Every Qt GUI in the
+#     image is widget-based, nothing loads a QML engine.
+# The .so libraries are untouched, so imports keep working.
+echo "[INFO] Pruning PySide6 translations and QML modules"
+PYSIDE6_DIR=$(python3 -c 'import os, PySide6; print(os.path.dirname(PySide6.__file__))')
+rm -rf "${PYSIDE6_DIR}/Qt/translations" "${PYSIDE6_DIR}/Qt/qml"
 
 echo "[INFO] Install EDA packages via Cargo"
 
@@ -88,12 +148,12 @@ export CARGO_HOME=/tmp/cargo
 export PATH=$CARGO_HOME/bin:$PATH
 rustup default stable
 
+# Pinned with the crate@version form rather than --version: cargo accepts that
+# flag only for a single crate, so a second one would break the invocation.
 cargo install \
-	gdsfill --version 0.1.8 \
+	gdscheck@0.1.2 \
+	gdsfill@0.1.11 \
 	--root "${TOOLS}"
-
-# Drop the Rust toolchain and registry cache so they don't bloat the image.
-rm -rf "$RUSTUP_HOME" "$CARGO_HOME"
 
 # The venvs use --system-site-packages so large dependencies already in the
 # system Python (numpy, scipy, pandas, ...) are not duplicated inside them;
@@ -116,12 +176,28 @@ python3 "$PDK_ROOT"/ihp-sg13g2/libs.tech/qucs-s/install.py --no-model-compile --
 echo "[INFO] Setting up VacasK for IHP SG13G2"
 cp "$PDK_ROOT"/ihp-sg13g2/libs.tech/vacask/.vacaskrc.toml /headless
 
+echo "[INFO] Setting up Veryl toolchain"
+# Run verylup setup at build time: it creates the veryl/veryl-ls proxy
+# hardlinks next to verylup in $TOOLS/veryl/bin (a normal user cannot create
+# them at runtime since that directory is root-owned) and installs the
+# default toolchain into the XDG data dir (/headless/.local/share/veryl).
+# install_links.sh later picks the proxies up into $TOOLS/bin, and the
+# Dockerfile chmods the toolchain tree writable so users can update/pin
+# toolchains with verylup themselves.
+"${TOOLS}/veryl/bin/verylup" setup
+
 echo "[INFO] Install EDA packages via GEM"
 gem install \
 	rggen:0.36.1 \
 	rggen-verilog:0.14.0 \
 	rggen-vhdl:0.13.0 \
 	rggen-veryl:0.8.0
+
+# Drop the Rust toolchain and registry cache so they don't bloat the image.
+# This must stay at the END of this script: RUSTUP_HOME/CARGO_HOME remain
+# exported above, and any later build step that merely probes cargo/rustc
+# (Ubuntu's rustup proxies) re-creates $RUSTUP_HOME/settings.toml.
+rm -rf "$RUSTUP_HOME" "$CARGO_HOME"
 
 echo "[INFO] EDA package installation completed"
 
@@ -134,3 +210,10 @@ echo "[INFO] Removing bundled Python package test suites"
 find /usr/local/lib/python3*/dist-packages \
 	/foss/tools/charlib/lib /foss/tools/vlsirtools/lib \
 	-type d \( -name tests -o -name test \) -prune -exec rm -rf {} +
+
+# Belt and braces: PIP_NO_CACHE_DIR above should keep this empty, but a tool
+# invoking pip with its own environment could still populate it, and the cache
+# is pure build residue that must not reach the image. HOME is /headless for
+# the whole build, so that is the only cache pip can write.
+echo "[INFO] Removing pip download cache"
+rm -rf "${HOME:-/headless}/.cache/pip"

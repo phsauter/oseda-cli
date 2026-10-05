@@ -30,7 +30,7 @@
 #       - Docker (Docker Engine on Linux / Docker Desktop on macOS), or
 #       - Podman (distribution packages on Linux / Homebrew on macOS)
 #   * XQuartz (macOS only, required for X11 mode)
-#   * Clones the iic-osic-tools repository to a user-chosen directory
+#   * Clones the IIC-OSIC-TOOLS repository to a user-chosen directory
 #
 # Before every step the user is asked for explicit permission. The script
 # is designed to be safe (strict mode, no piping curl-to-shell, integrity
@@ -153,7 +153,7 @@ pick_dnf() {
 choose_engine() {
     echo
     log "IIC-OSIC-TOOLS can be run with Docker (default) or Podman."
-    log "The start scripts auto-detect the installed engine; pick Podman for"
+    log "The choice is recorded for the start scripts; pick Podman for"
     log "daemonless, rootless containers (recommended on shared machines)."
     if ask "Use Podman instead of Docker as the container engine?"; then
         ENGINE="podman"
@@ -161,6 +161,29 @@ choose_engine() {
         ENGINE="docker"
     fi
     ok "Selected container engine: $ENGINE"
+}
+
+# Record the choice, otherwise the start scripts fall back to auto-detection,
+# which prefers docker when both CLIs are installed.
+persist_engine() {
+    local conf_dir="${XDG_CONFIG_HOME:-$HOME/.config}/iic-osic-tools"
+    local conf="${conf_dir}/env"
+    if ! have "$ENGINE"; then
+        warn "'$ENGINE' is not installed, not recording it in $conf."
+        return
+    fi
+    if [[ -e "$conf" ]] && ! ask "Overwrite the existing settings file $conf?"; then
+        warn "Kept $conf unchanged; prefix the start scripts with CONTAINER_ENGINE=$ENGINE to override."
+        return
+    fi
+    mkdir -p "$conf_dir"
+    cat > "$conf" <<EOF
+# Written by install.sh, sourced by the start_*.sh scripts.
+# The ":=" form means that a value set in the environment always wins.
+: "\${CONTAINER_ENGINE:=${ENGINE}}"
+export CONTAINER_ENGINE
+EOF
+    ok "Recorded container engine '$ENGINE' in $conf."
 }
 
 # Rootless Podman needs subordinate UID/GID ranges for the current user.
@@ -418,7 +441,7 @@ macos_install_xquartz() {
 # ----------------------- clone repository ---------------------------------
 clone_repo() {
     local default_dir="$HOME/iic-osic-tools" target_dir parent_dir parent_abs
-    read -u 3 -r -p "$(printf "%s[?]%s Directory to clone iic-osic-tools into [%s]: " "$C_YEL" "$C_RST" "$default_dir")" target_dir
+    read -u 3 -r -p "$(printf "%s[?]%s Directory to clone IIC-OSIC-TOOLS into [%s]: " "$C_YEL" "$C_RST" "$default_dir")" target_dir
     target_dir="${target_dir:-$default_dir}"
 
     # Expand a leading tilde manually (we won't run with `set -f` off-shell quirks).
@@ -471,11 +494,11 @@ clone_repo() {
     fi
 
     git clone --depth=1 https://github.com/iic-jku/iic-osic-tools.git "$target_dir"
-    ok "Cloned iic-osic-tools to '$target_dir'."
+    ok "Cloned IIC-OSIC-TOOLS to '$target_dir'."
     TARGET_DIR="$target_dir"
 }
 
-# Try to find an existing iic-osic-tools checkout if the clone step was skipped.
+# Try to find an existing IIC-OSIC-TOOLS checkout if the clone step was skipped.
 find_existing_repo() {
     local candidates=(
         "$PWD"
@@ -523,8 +546,10 @@ show_usage_hints() {
     echo " 3) Your design files live under \$DESIGNS (default: \$HOME/eda/designs)"
     echo "    and are mounted into the container at /foss/designs."
     echo
-    echo " The start scripts auto-detect Docker or Podman; if both are"
-    echo " installed, override with e.g. CONTAINER_ENGINE=podman ./start_vnc.sh"
+    echo " The chosen container engine is recorded in"
+    echo "      ${XDG_CONFIG_HOME:-\$HOME/.config}/iic-osic-tools/env"
+    echo "    (edit or delete that file any time). Override per launch with"
+    echo "    e.g. CONTAINER_ENGINE=docker ./start_vnc.sh"
     echo
     echo " The first launch will pull the ~4 GB image from Docker Hub."
     echo " Reserve at least 20 GB of free disk space."
@@ -542,7 +567,7 @@ macos_reboot() {
             || die "Failed to schedule reboot."
         warn "Reboot scheduled in 1 minute. Run 'sudo killall shutdown' to cancel."
     else
-        warn "Please reboot manually before using iic-osic-tools."
+        warn "Please reboot manually before using IIC-OSIC-TOOLS."
     fi
 }
 
@@ -602,12 +627,13 @@ main() {
             else
                 step "Install Docker Engine (official repo)"  linux_install_docker
             fi
-            step "Clone iic-osic-tools repository"        clone_repo
+            step "Clone IIC-OSIC-TOOLS repository"        clone_repo
             echo
             ok "All selected Linux steps completed."
             if [[ "$ENGINE" == "docker" ]]; then
                 warn "If you were just added to the 'docker' group, log out and back in (or reboot) before using Docker."
             fi
+            persist_engine
             show_usage_hints
             ;;
         linux-dnf)
@@ -618,12 +644,13 @@ main() {
             else
                 step "Install Docker Engine (official repo)"  linux_dnf_install_docker
             fi
-            step "Clone iic-osic-tools repository"        clone_repo
+            step "Clone IIC-OSIC-TOOLS repository"        clone_repo
             echo
             ok "All selected Linux steps completed."
             if [[ "$ENGINE" == "docker" ]]; then
                 warn "If you were just added to the 'docker' group, log out and back in (or reboot) before using Docker."
             fi
+            persist_engine
             show_usage_hints
             ;;
         macos)
@@ -635,7 +662,8 @@ main() {
                 step "Install Docker Desktop via Homebrew" macos_install_docker
             fi
             step "Install XQuartz via Homebrew"           macos_install_xquartz
-            step "Clone iic-osic-tools repository"        clone_repo
+            step "Clone IIC-OSIC-TOOLS repository"        clone_repo
+            persist_engine
             show_usage_hints
             step "Reboot macOS (recommended final step)"  macos_reboot
             ok "macOS installation steps completed."

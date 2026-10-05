@@ -6,7 +6,7 @@ IIC-OSIC-TOOLS is a comprehensive Docker/Podman-based container distribution for
 
 **Key directories:**
 - `_build/`: Multi-stage Docker build system with tool images and build orchestration
-- `_tests/`: Regression test suite (28 tests covering PDKs, tools, and workflows)
+- `_tests/`: Regression test suite (35 tests covering PDKs, tools, and workflows)
 - Root scripts: Container startup scripts for VNC, X11, Jupyter, and shell modes
 
 ## Architecture & Build System
@@ -50,13 +50,14 @@ each one pulls in whatever it depends on.
 
 ## PDK Management
 
-Three PDKs are pre-installed with automatic environment setup:
+Four PDKs are pre-installed with automatic environment setup:
 
 **Switching PDKs**: Use `sak-pdk <pdk-name>` (not raw export commands)
 ```bash
 sak-pdk sky130A                    # SkyWater 130nm
 sak-pdk gf180mcuD                  # GlobalFoundries 180nm  
 sak-pdk ihp-sg13g2                 # IHP 130nm SiGe BiCMOS (default)
+sak-pdk ihp-sg13cmos5l             # IHP 130nm CMOS
 ```
 
 The script sets: `PDK`, `PDKPATH`, `STD_CELL_LIBRARY`, `SPICE_USERINIT_DIR`, `KLAYOUT_PATH`
@@ -82,7 +83,7 @@ Scripts in repository root (`.sh` for Linux/macOS, `.bat` for Windows):
 
 ### Testing Strategy
 
-Run tests inside container with `_tests/run_docker_tests.sh` or individually:
+Run tests inside container with `_tests/run_integration_tests.sh` or individually:
 ```bash
 cd _tests/01 && ./test_librelane_sky130a.sh
 ```

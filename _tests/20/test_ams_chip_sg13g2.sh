@@ -7,11 +7,13 @@
 # (https://github.com/iic-jku/ihp-sg13g2-ams-chip-template)
 
 if [ -z "${RAND}" ]; then
-    RAND=$(hexdump -e '/1 "%02x"' -n4 < /dev/urandom)
+    RAND=$(hexdump -v -e '/1 "%02x"' -n4 < /dev/urandom)
 fi
 
-# test output is kept out of the bind-mounted source tree (see run_docker_tests.sh)
+# test output is kept out of the bind-mounted source tree (see run_integration_tests.sh)
 RUNS_DIR=${IIC_TEST_RUNDIR:-/tmp/iic-osic-tools-tests}
+
+DEBUG=${DEBUG:-0}
 
 TMP=${RUNS_DIR}/${RAND}/20
 LOG=$TMP/ams_chip_sg13g2.log
@@ -20,9 +22,9 @@ REPO=ihp-sg13g2-ams-chip-template
 mkdir -p "$TMP"
 cd "$TMP" || exit 1
 
-# Clone the main branch of the AMS chip template (incl. submodules)
-[ "$DEBUG" = 1 ] && echo "[INFO] Cloning $REPO (main branch, incl. submodules) ..."
-if ! git clone --depth 1 --recursive --shallow-submodules --branch main \
+# Clone the next_release branch of the AMS chip template (incl. submodules)
+[ "$DEBUG" = 1 ] && echo "[INFO] Cloning $REPO (next_release branch, incl. submodules) ..."
+if ! git clone --depth 1 --recursive --shallow-submodules --branch next_release \
         https://github.com/iic-jku/"$REPO".git "$REPO" > "$LOG" 2>&1; then
     echo "[ERROR] Test <AMS chip template with ihp-sg13g2> FAILED! Could not clone the repository. Check the log file $LOG for details."
     exit 1

@@ -16,12 +16,55 @@ else
     echo "[INFO] Test <Loading Python-packages> passed."
 fi
 
+if ! python "$DIR/pyside6_files.py"
+then
+    echo "[ERROR] Test <PySide6 installation complete> FAILED."
+    ERR=1
+else
+    echo "[INFO] Test <PySide6 installation complete> passed."
+fi
+
 if ! /foss/tools/charlib/bin/python -c "import charlib"
 then
     echo "[ERROR] Test <Loading charlib> FAILED."
     ERR=1
 else
     echo "[INFO] Test <Loading charlib> passed."
+fi
+
+# A bare "import charlib" passes even when CharLib is unusable, so exercise the
+# PySpice API it actually needs. This catches the venv's pinned PySpice fork
+# being shadowed by the system PySpice via the global PYTHONPATH.
+if ! charlib_pyspice=$(env -u PYTHONPATH /foss/tools/charlib/bin/python -c \
+    "import PySpice
+assert PySpice.__file__.startswith('/foss/tools/charlib/'), PySpice.__file__
+PySpice.Circuit('t')" 2>&1)
+then
+    echo "[ERROR] Test <charlib PySpice API> FAILED: ${charlib_pyspice}"
+    ERR=1
+else
+    echo "[INFO] Test <charlib PySpice API> passed."
+fi
+
+# The charlib on PATH must be the wrapper that unsets PYTHONPATH, not a bare
+# symlink into the venv (see install_links.sh).
+if ! grep -q "unset PYTHONPATH" "$(command -v charlib)" 2>/dev/null
+then
+    echo "[ERROR] Test <charlib PYTHONPATH wrapper> FAILED."
+    ERR=1
+else
+    echo "[INFO] Test <charlib PYTHONPATH wrapper> passed."
+fi
+
+# gdsfill is no longer a Python package: the image installs the Rust
+# implementation via cargo (see install_eda.sh), so it is covered here as a CLI
+# instead of as an import.
+if ! gdsfill --help > /dev/null 2>&1
+then
+    echo "[ERROR] Test <gdsfill CLI> FAILED."
+    ERR=1
+else
+    echo "[INFO] Test <gdsfill CLI> passed."
 fi
 
 if ! /foss/tools/vlsirtools/bin/python -c "import hdl21"

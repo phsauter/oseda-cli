@@ -16,30 +16,43 @@ To install `socat`, here are the commands for popular distributions:
 
 The current variant of the `start_x.bat` for Windows uses WSLg for audio & visual output, which comes preinstalled/packaged with WSL (Windows 10 Build 19044 or Windows 11). If problems arise, update WSL according to [the Microsoft website](https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps).
 
-### Frequent Crashes of `xschem` on Windows 10+
-
-Since the update of the image to Ubuntu 24.04 LTS with tag `2025.01` there are reports of frequent crashes of `xschem` under Windows 11 using certain versions of specific X-servers. It has been found that using <https://vcxsrv.com> version `64.1.17.2.0` under Windows 11 works well (see [issue 92](https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/92)).
-
 ### Issues with OpenGL on Some Environments
 
-A few applications are using OpenGL graphics, which can lead to issues on some computing environments. A (potential) remedy is to enable SW-rendering with can be achieved by setting the following environment variable inside the Docker VM:
+A few applications are using OpenGL graphics, which can lead to issues on some computing environments. A (potential) remedy is to enable software rendering by setting the following environment variable inside the container:
 
 ```bash
-export LIBGL_ALWAYS_INDIRECT=0
+export LIBGL_ALWAYS_SOFTWARE=1
 ```
+
+In X11 mode `start_x.sh` sets `LIBGL_ALWAYS_INDIRECT=1`; `export LIBGL_ALWAYS_INDIRECT=0` switches indirect GLX off again, which can help as well.
+
+### Mouse Gestures Break the Right-Button Drag in the Browser (noVNC) Session
+
+Some browsers reserve *hold the right mouse button and move* for their own mouse gestures and consume it before the page sees it. In the browser session this silently swallows every right-button drag: the press and the release still arrive, the motion in between does not. In KLayout the visible effect is that the right-drag zoom box never appears and the context menu opens instead; the same applies to any other right-button drag in any tool.
+
+`Vivaldi` ships this enabled; switch it off under `Settings > Mouse > Gestures` by unticking `Allow Gestures`. If left/right button combinations misbehave as well, `Rocker Gestures` on the same page does the same thing to those. Other browsers with a gesture feature (`Opera`, or a gesture extension in `Chrome`/`Firefox`) can intercept the drag in the same way; look for a "mouse gestures" option and turn it off. `Safari`, `Chrome` and `Firefox` have no such feature by default and are unaffected, as is the plain VNC mode, where no browser sits in the path.
+
+Note that up to image `2026.07` this was partly masked by a defect in the shipped noVNC `1.3.0`: a lost button release left the button held down at the X server, which made the zoom box follow the pointer anyway. Fixing that in `2026.08` (noVNC `1.7.0`) removed the accidental workaround, so the gesture conflict now shows up plainly.
 
 ### Issues with KLayout PCell Libraries
 
 Some pcell libraries were developed for older `gdsfactory` versions:
 
-- Skywater `sky130A`/`sky130B`: pcells were written against the `gdsfactory` 8.x APIs and private kfactory 0.17.x internals (`_get_default_kcl`, `_kdb_cell`, `Component.add_array`, implicit generic-PDK activation), which later `gdsfactory`/kfactory versions removed.
-- Global Foundries `gf180mcuC`/`gf180mcuD`: pcells rely on the implicit generic-PDK activation that `gdsfactory` removed in 9.29.0.
+- Skywater `sky130A`: pcells were written against the `gdsfactory` 8.x APIs and private kfactory 0.17.x internals (`_get_default_kcl`, `_kdb_cell`, `Component.add_array`, implicit generic-PDK activation), which later `gdsfactory`/kfactory versions removed.
+- Global Foundries `gf180mcuD`: pcells rely on the implicit generic-PDK activation that `gdsfactory` removed in 9.29.0.
 
 The image addresses these automatically (issue <https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/162>): both pcell libraries are patched at PDK-install time so they work with the current system `gdsfactory` and need no dedicated virtual environment.
 
+Two further pcell defects are patched at PDK-install time as well, and the patches are removed once they are fixed upstream:
+
+- IHP `ihp-sg13g2`: `sealring` obtained the PDK version by running `git` inside the PDK tree, which is installed without its `.git`. It now reads the `COMMIT` file next to the PDK. `isolbox` defaulted its length and width below the minimum its own callback enforces, warning on every default instantiation.
+- Global Foundries `gf180mcuD`: the `efuse` pcell came out empty, because `draw_efuse()` was called without its required `device_name` argument and looked for its GDS in `~/.klayout/pymacros`, where nothing installs it.
+
+Regression test 27 (`_tests/27`) instantiates every pcell of every packaged PDK with its default parameters and pins the outcome, so a regression or an upstream fix is reported.
+
 ### The OpenROAD Flow Scripts (ORFS)
 
-The ORFS require a recent version of `openroad`. Since image tag `2024.12` a recent version is installed alongside the OpenROAD version required by `librelane`. In tag `2025.10` and beyond the `openroad` and `sta` version that is found is a recent version that can be used with the ORFS.In order to use the ORFS, **before** calling the `make` script make sure to set the following env vars:
+The ORFS require a recent version of `openroad`. Since image tag `2024.12` a recent version is installed alongside the OpenROAD version required by `librelane`. In tag `2025.10` and beyond the `openroad` and `sta` found in `PATH` are this recent version. In order to use the ORFS, **before** calling the `make` script make sure to set the following env vars:
 
 ```bash
 export YOSYS_EXE=$TOOLS/yosys/bin/yosys
@@ -47,7 +60,7 @@ export OPENROAD_EXE=$TOOLS/openroad/bin/openroad
 export OPENSTA_EXE=$TOOLS/openroad/bin/sta
 ```
 
-Since the OpenROAD and ORFS version are tightly interlinked with regular interface breaks, the ORFS Git commit hash at image build time is stored in `$TOOLS/openroad/ORFS_COMMIT`. After cloning ORFS from GitHub use the following command to switch to a working and tested ORFS version:
+Since the OpenROAD and ORFS version are tightly interlinked with regular interface breaks, the ORFS Git commit hash at image build time is stored in `$TOOLS/openroad/ORFS_COMMIT` (regression test 10 runs against it). After cloning ORFS from GitHub use the following command to switch to that ORFS version:
 
 ```bash
 git checkout $(cat $TOOLS/openroad/ORFS_COMMIT)
@@ -61,9 +74,78 @@ Since image `2026.07` Surfer is started through a wrapper that forces the EGL re
 
 Note that in X11 mode Surfer is software-rendered inside the container and every frame is pushed uncompressed over the X connection, so the VNC mode feels snappier when working with Surfer. If Surfer still crashes on your platform, please file a bug report.
 
+### Illegal Instruction (SIGILL) on Apple Silicon
+
+On Apple Silicon the Linux VM that backs the container engine advertises the CPU
+feature `SVE2` in `HWCAP2` while the base `SVE` bit in `HWCAP` stays clear, a
+combination that cannot occur on real hardware, since SVE2 implies SVE. SVE
+instructions then trap. The CPU probe of AWS-LC/OpenSSL trusts the SVE2 bit and
+executes one (`cntb`, in `_armv8_sve_get_vl_bytes`) at library load time, so any
+binary using that dispatch dies with `Illegal instruction (core dumped)`.
+
+Which consumers trip over this changes as the bundled libraries move, so the
+symptom is a better guide than any single example. Re-checked on an Apple M4 with
+Podman 6.1.1 (Fedora CoreOS 41, kernel 6.12.13) against image `2026.08`:
+`import siliconcompiler` dies with `Illegal instruction (core dumped)` and exit
+code 132, and every `cocotb` simulation dies the same way inside the simulator
+process, right after cocotb prints its `Initialized cocotb` banner. The backend
+makes no difference, both the Icarus and the Verilator flow were checked: the
+crash happens in the embedded Python that cocotb loads, before the simulator
+itself does any work. `import cryptography` is *not* affected any more, though
+it was in earlier images, so it is no longer a usable probe for this problem.
+Older cocotb releases reported the crash as `Simulation failed: -4`, that is the
+negative of signal 4, `SIGILL`; cocotb 2.x lets the `Illegal instruction`
+message through instead.
+
+That the mask is what matters can be confirmed directly: pinning
+`OPENSSL_armcap` to any value avoids the crash, both `0` and `1` do, because the
+pin replaces the runtime capability detection rather than correcting it.
+
+The same image and library versions run fine on native `arm64` Linux, so this is
+a property of the VM, not of the `arm64` image. It is not specific to Podman
+either: the incoherent feature pair comes from the guest kernel on Apple's
+hypervisor, so Docker Desktop can be affected in the same way, depending on the
+kernel its VM ships.
+
+Since image `2026.08` the `start_*.sh` scripts detect Apple Silicon and pass
+`OPENSSL_armcap=0` into the container, which makes the probe use that mask
+instead of detecting capabilities and avoids the crash. The only cost is ARM
+crypto acceleration inside the container. Export `OPENSSL_armcap` yourself to
+pin a different mask, or export it empty to switch the workaround off.
+
+Container options are fixed at create time, so a container created before this
+fix has to be removed (press `r` at the prompt) and re-created; a container that
+is reused silently keeps its old environment and still crashes. Check from
+inside the container with `printenv OPENSSL_armcap`: the workaround is in effect
+when that prints `0`, and absent when it prints nothing. Starting the container
+directly with `docker run` or `podman run` instead of through a `start_*.sh`
+script bypasses the workaround the same way. With an older checkout, use
+`DOCKER_EXTRA_PARAMS="-e OPENSSL_armcap=0" ./start_shell.sh`.
+
+### SELinux Hosts (Fedora, RHEL and Clones)
+
+On hosts with SELinux the container runs as `container_t`, while the bind-mounted
+X11/Wayland sockets keep their host label `user_tmp_t` and the designs directory
+keeps `user_home_t`. Access to both is denied: `start_x.sh` shows no window and
+the container exits a few seconds after the start, and `/foss/designs` is
+inaccessible in every mode. The denials show up in `sudo ausearch -m avc -ts recent`.
+See <https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/352>.
+
+Since image `2026.08` the `start_*.sh` scripts add `--security-opt label=disable`
+when the host kernel has SELinux enabled, which switches off type enforcement for
+that container only. Set `IIC_OSIC_TOOLS_SELINUX_LABEL` to pick a different label
+option, or export it empty to switch the workaround off, see
+[Section 5.1.1 of the README](README.md#511-selinux-fedora-rhel-and-clones).
+
+Container options are fixed at create time, so a container created before this
+fix has to be removed (press `r` at the prompt) and re-created. With an older
+checkout, use `DOCKER_EXTRA_PARAMS="--security-opt label=disable" ./start_x.sh`.
+If you relabelled the designs directory by hand, undo it with
+`restorecon -R -v ~/eda/designs`.
+
 ### Podman Compatibility
 
-The IIC-OSIC-Tools container can be run using Podman instead of Docker. The start scripts auto-detect the installed engine (override with `CONTAINER_ENGINE=podman`), and in rootless mode they automatically add `--userns=keep-id` and default the VNC webserver port to `8080`, see [Section 5.1 of the README](README.md#51-podman).
+The IIC-OSIC-TOOLS container can be run using Podman instead of Docker. The start scripts auto-detect the installed engine (override with `CONTAINER_ENGINE=podman`), and in rootless mode they automatically add `--userns=keep-id` and default the VNC webserver port to `8080`, see [Section 5.1 of the README](README.md#51-podman). On Fedora/RHEL also see the SELinux section above.
 
 If you run *rootful* Podman with a non-root `CONTAINER_USER`, bind-mounts are mounted as root, which creates problems when accessing files inside the container. In this case, either switch to rootless Podman (recommended), or edit the desired start script and find/replace all occurrences of `:rw` with `:U,rw`, so Podman will chown the mounted directories to the given `UID` inside the container.
 
@@ -71,16 +153,26 @@ If you run *rootful* Podman with a non-root `CONTAINER_USER`, bind-mounts are mo
 
 Running Docker in rootless mode with X11/Wayland forwarding (`start_x.sh`) is not fully supported. The X11 and Wayland sockets are not accessible from the container due to UID/GID mismatches in the user namespace. There is no straightforward fix for Docker rootless mode.
 
-**Workaround:** Switch to [Podman](https://podman.io/) in rootless mode (see [Section 5.1 of the README](README.md#51-podman)). The start scripts automatically detect Podman rootless mode and add `--userns=keep-id`.
-
-### Palace EM-Setup
-
-Volker Muehlaus' `setupEM`/`gds2palace` tool for AWS Palace is only installed for `x86_64`, as there are currently issues with `gmsh` for `arm64` on Linux.
+**Workaround:** Switch to [Podman](https://podman.io/) in rootless mode (see [Section 5.1 of the README](README.md#51-podman)). The start scripts automatically detect Podman rootless mode and add `--userns=keep-id`. On Fedora/RHEL also see the SELinux section above.
 
 ### GDS3D crashing on macOS
 
-At least since tag `2025.12` GDS3D is crashing with an error message. Unfortunately, there is no known fix at the moment. See <https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/220>.
+At least since tag `2025.12` GDS3D is crashing with an error message. Unfortunately, there is no known fix at the moment, and upstream GDS3D has seen no changes since 2024. See <https://github.com/iic-jku/IIC-OSIC-TOOLS/issues/220> (closed without a fix).
 
 ## Build
 
-No known issues at the moment. However, be warned that building the image is quite involved and may take several hours depending on the host system performance and network connection. For a multi-architecture build (`amd64` + `arm64`) dedicated build servers with sufficient resources are recommended. Cross-architecture builds take ages and are not recommended. Plus, a private Docker registry is currently used by the build system to store intermediate build stages, which requires a fast network connection to the registry server.
+### The IHP PDKs Are Built from a Branch, Not from a Pinned Commit
+
+Unlike every other component of the image, the IHP PDKs are installed from the tip of a branch: both `ihp-sg13g2` and `ihp-sg13cmos5l` come from the `dev` branch of `iic-jku/IHP-Open-PDK`, which carries the two of them side by side since SG13CMOS5L moved into that repository. This is deliberate (the PDKs move fast and the image is expected to carry their current state), but it means two rebuilds of the same commit of this repository can produce different PDK content, and that new devices can appear without any change here. The commit actually installed is recorded in `$PDK_ROOT/<pdk>/COMMIT`, the same hash for both PDKs.
+
+That is not free, and the failure it causes is indirect. When the PDK gains a device, the corner files gain an `.include` for it, while the tools that consume the PDK are pinned and know nothing about it. VACASK's `sg13cmos5ltovc.py` converter, for example, names the model files it converts and the Verilog-A it compiles in two hardcoded lists, so a new device is silently skipped, yet the corner file including it is converted verbatim. Every VACASK deck pulling in that corner then fails on a missing include, even one that uses none of its devices. The metal fringe MoM capacitor `cap_cmomf`, added to both PDKs on 2026-08-11, broke the entire `ihp-sg13cmos5l` VACASK capacitor path exactly this way.
+
+The image therefore does not assume the two sides agree:
+
+- the converter's device lists are completed from the installed PDK before it runs, so a device the PDK ships but VACASK does not know about is converted and compiled anyway (a no-op once VACASK catches up);
+- after the conversion, every include in the converted model files is resolved, and every OSDI object the PDK's own `.spiceinit` loads is checked to exist, so an incomplete conversion fails the build instead of shipping;
+- regression test 27 pins the pcell count of every PDK, which turns an inventory change into a failure that has to be looked at rather than a silent drift.
+
+The counts in `_tests/27/check_pcells.py` consequently need updating whenever the PDKs legitimately gain or lose a pcell; the test reports the expected and the actual number so the change can be reviewed.
+
+No other known build issues at the moment. However, be warned that building the image is quite involved and may take several hours depending on the host system performance and network connection. For a multi-architecture build (`amd64` + `arm64`) dedicated build servers with sufficient resources are recommended. Cross-architecture builds take ages and are not recommended. Plus, a private Docker registry is currently used by the build system to store intermediate build stages, which requires a fast network connection to the registry server.

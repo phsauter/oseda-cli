@@ -2,6 +2,50 @@
 
 This document summarizes the most important changes of the individual releases of the `IIC-OSIC-TOOLS` Docker container.
 
+## 2026.09
+
+* [Adding] the 3.3 V high-voltage standard-cell libraries of both IHP PDKs, `sg13g2_stdcell_hv` and `sg13cmos5l_stdcell_hv`
+* [Update] `gdsfill` `v0.1.11`, which adds dummy fill for `gf180mcu`
+* [Update] `cocotb` `2.1.0`, `pyuvm` `5.0.0` (major release, check your testbenches) and `klayout-pex` `0.4.4`
+* [Update] various tool and Python package version bumps
+* [Changing] both IHP PDKs are installed from the single `iic-jku/IHP-Open-PDK` repository, and `$PDK_ROOT/<pdk>/COMMIT` records the same commit for both
+* [Remove] the Python implementation of `gdsfill`; the Rust `gdsfill` CLI remains
+* [Fix] the KLayout DRC and LVS menus of both IHP PDKs write their reports into the project's `verification` folder next to the layout
+* [Fix] the start scripts warn on Apple Silicon when a reused container lacks the `OPENSSL_armcap` workaround
+* [Build] new regression tests 34 (KLayout GUI run directory) and 35 (PEX bench of the open-pdks regression tests)
+* [Build] `xschem` builds in a single parallel `make` again
+* [Build] the `pulp-tools` image pre-fetches the sources `bender` needs, with retries
+
+## 2026.08
+
+* [Adding] [`gdscheck`](https://github.com/aesc-silicon/gdscheck) `v0.1.2`, a standalone Rust DRC engine for GDSII
+* [Adding] FPGA place-and-route for Lattice ECP5 next to iCE40
+* [Adding] `sak-gds-xor.py`, which XORs two layouts (GDS2/OASIS) with KLayout
+* [Adding] `sak-open.py`, a launcher that scans a design tree and opens each design file in the matching tool
+* [Adding] `sak-render.py`, which renders a layout to PNG off-screen with the PDK's own KLayout colors
+* [Adding] the `unifont` package
+* [Adding] a complete logo asset pack in `_logo/`
+* [Update] various tool and Python package version bumps
+* [Changing] the browser session serves the full noVNC client from upstream `v1.7.0` instead of the `vnc_lite.html` demo page from Ubuntu's `1.3.0`
+* [Changing] the branding is refreshed with the new logo
+* [Changing] the desktop terminal is `xfce4-terminal` instead of `gnome-terminal`
+* [Changing] double-clicking a file in Thunar (or `xdg-open`) opens the matching tool
+* [Changing] `xschem` requires the Ctrl key to zoom and pan inside graph (waveform) widgets (`graph_use_ctrl_key`), set system-wide
+* [Changing] the Liberty files in `libs.ref` of all packaged PDKs also ship gzipped as `.lib.gz`, which the PDK flow configurations reference and every Liberty-reading tool handles. **Deprecation notice:** the uncompressed `.lib` files are kept for the next few releases and will then be removed, so please migrate your own flows!
+* [Fix] `xschem` no longer asks whether embedded Tcl scripts may be executed, which the PDK launcher symbols and `tcleval()` attributes need: `xschem_execute_scripts yes` moved to the system-wide `xschemrc`
+* [Fix] `start_vnc.sh` detects rootless Podman on macOS and Windows too
+* [Fix] the start scripts no longer prefix `DOCKER_REGISTRY` when `DOCKER_USER` already names a registry
+* [Fix] forcing VNC mode with `-V`/`--vnc` killed the container, because that flag skips the UI auto-detection that set `DISPLAY`
+* [Fix] the browser no longer serves a stale noVNC client after an image upgrade
+* [Fix] the `[INFO] noVNC HTML client started` line and the `README` instructions omitted the web server port
+* [Fix] `XDG_RUNTIME_DIR` is created per user as `/tmp/runtime-<uid>` with mode `0700` instead of a root-owned, world-writable shared directory
+* [Fix] `PySide6` was left broken by the removal of `PySide6-Addons`
+* [Fix] selecting the PDK at container start (`-e PDK=<pdk>`) now also derives `STD_CELL_LIBRARY` and `GF_PDK_OPTION`
+* [Fix] `sak-pin-reorder.py` matches the `.subckt` card case-insensitively
+* [Fix] the container works on SELinux hosts (Fedora, RHEL and clones), where the bind-mounted GUI sockets and designs directory were denied. The start scripts now add `--security-opt label=disable` when SELinux is enabled
+* [Fix] a container that dies during startup no longer fails silently
+* [Fix] `install.sh` records the chosen container engine in `$HOME/.config/iic-osic-tools/env`, which the start scripts source
+
 ## 2026.07
 
 * [Adding] full [Podman](https://podman.io/) support across all start and install scripts: the container engine is auto-detected (`CONTAINER_ENGINE`), rootless mode adds `--userns=keep-id` and defaults the VNC webserver to port `8080`, and a `DOCKER_REGISTRY` variable qualifies the image name. No `podman-docker` alias or script edits are needed anymore.
