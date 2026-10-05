@@ -8,11 +8,30 @@ SPDX-License-Identifier: Apache-2.0
 ## Baseline
 
 - Upstream: `https://github.com/iic-jku/IIC-OSIC-TOOLS.git`
-- Upstream release: `2026.07`
-- Base commit: `b7e6926578621c0a54b7e168f6583021933a40d2`
-- Initial CLI release: `2026.07`
+- Upstream release: `2026.09`
+- Base commit: `6b544a7ecba94a39149733eea95b3f17ac1ff7b6`
+- CLI release: `2026.09` (initial release: `2026.07`)
 - Base distribution: Ubuntu 24.04 (`ubuntu:noble`)
 - Platforms: `linux/amd64`, `linux/arm64`
+
+## 2026.09 update
+
+The fork merges the upstream `2026.09` release at the commit above and uses its
+manifest and source recipes. The digital parameters still disable OpenROAD's
+GUI, MCY installation, and Verilator's developer debug compiler. Ubuntu remains
+24.04, and the core image still contains no PDK or desktop environment.
+
+Notable updates include Verilator 5.052, Yosys/EQY/SBY 0.69, and the upstream
+Bender, sv2v, Slang, Yosys-Slang, Kepler Formal, OpenROAD, Verible, uv, and
+RISC-V toolchain pins. Upstream's Yosys companion names now use hyphens.
+The PULP recipe includes upstream's pinned Slang/fmt/mimalloc fetch handling,
+and the OpenROAD recipe includes its test-directory configuration workaround.
+
+Before publication, the upstream baseline comparison, shell syntax checks,
+and Buildx Bake graph expansion pass. The expanded `image-digital-source`
+graph contains only the digital builder and selected digital tool stages.
+The GHCR workflow builds the release and gates publication on the functional
+and entrypoint smoke suites.
 
 ## Initial implementation scope
 
